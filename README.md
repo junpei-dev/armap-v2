@@ -3,6 +3,10 @@
 来校者が事務室窓口のQRコードを読むと、目的の部屋（職員室・各科職員室など）までの道順を
 スマートフォンで案内するWebアプリ。課題研究の制作物。
 
+- 来校者向け: https://armap-v2.pages.dev/ （公開準備中）
+- 管理コンソール: /admin （登録した学校メールで認証。生徒は Chromebook・スマートフォンからデータを入力）
+- 構成: React + Vite / Cloudflare Pages・Pages Functions・D1・Access
+
 ## ドキュメント
 
 | 文書 | 内容 |
