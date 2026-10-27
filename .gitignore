@@ -14,3 +14,6 @@ dist/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# 個人情報（管理コンソールの利用者一覧など）。公開リポジトリに入れない
+local/
