@@ -1,0 +1,11 @@
+# Cloudflare Pages の設定（設計書 3章・10章）
+name = "armap-v2"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"
+
+# D1 データベース。Functions からは env.DB で使う
+[[d1_databases]]
+binding = "DB"
+database_name = "armap-v2"
+database_id = "a140e85e-5fa1-47f8-af9a-bad1f539e6e3"
+migrations_dir = "migrations"

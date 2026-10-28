@@ -20,3 +20,6 @@ local/
 
 # 校章の元画像（アプリでは public/icon.png を使う）
 /kousyou.png
+
+# wrangler のローカル実行データ
+.wrangler/
