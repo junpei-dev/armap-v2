@@ -63,3 +63,31 @@ export async function save(
   if (!res.ok) throw new SaveError(data.error ?? `保存できませんでした（${res.status}）`, data.issues ?? [])
   return data
 }
+
+export type HistoryEntry = {
+  id: number
+  at: string // 世界標準時 "YYYY-MM-DD HH:MM:SS"
+  user: string
+  table: EditableTable
+  recordId: string
+  action: 'insert' | 'update' | 'delete' | 'undo'
+  before: unknown
+  after: unknown
+}
+
+export async function fetchHistory(): Promise<HistoryEntry[]> {
+  const res = await fetch('/api/admin/history')
+  if (!res.ok) throw new Error(`変更履歴を読み込めませんでした（${res.status}）`)
+  return res.json()
+}
+
+/** 変更履歴の1件を元に戻す。失敗したら SaveError を投げる */
+export async function undoHistory(id: number): Promise<void> {
+  const res = await fetch(`/api/admin/history/${id}/undo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new SaveError(data.error ?? `元に戻せませんでした（${res.status}）`, data.issues ?? [])
+}

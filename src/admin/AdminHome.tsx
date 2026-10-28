@@ -4,8 +4,10 @@ import type { AdminData, Issue } from '../types.ts'
 import { AdminContext, type AdminContextValue } from './AdminContext.tsx'
 import './admin.css'
 import CheckpointsEditor from './CheckpointsEditor.tsx'
+import HistoryPage from './HistoryPage.tsx'
 import MapEditor from './MapEditor.tsx'
 import RoomsEditor from './RoomsEditor.tsx'
+import RoutePreview from './RoutePreview.tsx'
 import SurveyNotes from './SurveyNotes.tsx'
 import TopPage from './TopPage.tsx'
 
@@ -18,6 +20,8 @@ const TABS = [
   { id: 'map', label: '地図エディタ' },
   { id: 'rooms', label: '部屋' },
   { id: 'checkpoints', label: 'チェックポイント' },
+  { id: 'preview', label: '経路の確認' },
+  { id: 'history', label: '変更履歴' },
 ] as const
 type TabId = (typeof TABS)[number]['id']
 
@@ -136,6 +140,8 @@ export default function AdminHome() {
             {tab === 'map' && <MapEditor />}
             {tab === 'rooms' && <RoomsEditor />}
             {tab === 'checkpoints' && <CheckpointsEditor />}
+            {tab === 'preview' && <RoutePreview />}
+            {tab === 'history' && <HistoryPage />}
           </main>
         </AdminContext.Provider>
       )}
