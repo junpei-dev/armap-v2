@@ -46,6 +46,38 @@ export function localToGlobal(p: LocalPoint, placement: BuildingPlacement): Poin
   }
 }
 
+/** 点が多角形の内側にあるか（境界線の上は内側とみなす。0.05m の余裕） */
+export function pointInPolygon(p: Point, polygon: Point[]): boolean {
+  const n = polygon.length
+  // 境界線の近くなら内側
+  for (let i = 0; i < n; i++) {
+    if (distanceToSegment(p, polygon[i], polygon[(i + 1) % n]) < 0.05) return true
+  }
+  let inside = false
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const a = polygon[i]
+    const b = polygon[j]
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
+/** 点と線分の距離 */
+export function distanceToSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return distance(p, a)
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+  return distance(p, { x: a.x + t * dx, y: a.y + t * dy })
+}
+
+/** 多角形の頂点の平均（棟名を置く位置の目安） */
+export function centroid(points: Point[]): Point {
+  const sum = points.reduce((s, p) => ({ x: s.x + p.x, y: s.y + p.y }), { x: 0, y: 0 })
+  return { x: sum.x / points.length, y: sum.y / points.length }
+}
+
 /** 全体座標をローカル座標に戻す（地図をタップしてノードを置いたときに使う） */
 export function globalToLocal(p: Point, placement: BuildingPlacement): LocalPoint {
   const { origin, rotation } = placement
