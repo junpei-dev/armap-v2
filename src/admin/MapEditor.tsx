@@ -259,7 +259,9 @@ export default function MapEditor() {
 function ScaleProbe({ onScale }: { onScale: (v: number) => void }) {
   const px = useMapScale()
   // 値が変わったときだけ知らせる
-  useEffect(() => onScale(px), [px, onScale])
+  useEffect(() => {
+    onScale(px)
+  }, [px, onScale])
   return null
 }
 

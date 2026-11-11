@@ -182,3 +182,11 @@ describe('buildSteps（区間と案内文）', () => {
     expect(stepText({ to, distance: 1, action: { type: 'turn', dir: 'left' } })).toBe('掲示板で、左へ曲がります')
   })
 })
+
+describe('routeHighlights（全体マップの下の要点）', () => {
+  it('階段と出入口を拾う', async () => {
+    const { routeHighlights } = await import('../src/core/route.ts')
+    const route = planRoute(nodes, edges, [], config, 'B1-1F-D-jimu', 'B1-2F-D-kaigi', '会議室')!
+    expect(routeHighlights(route)).toEqual(['ホール横の階段で2階へ'])
+  })
+})

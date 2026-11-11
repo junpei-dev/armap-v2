@@ -266,3 +266,24 @@ export function planRoute(
     seconds: walk / config.walkSpeed + floors * config.stairSeconds,
   }
 }
+
+/**
+ * 全体マップの下に出す「通る主な目印」（要件 F-17）
+ * 例: ["北側の出入口を通る", "ホール横の階段で2階へ"]
+ */
+export function routeHighlights(route: Route, max = 3): string[] {
+  const out: string[] = []
+  for (const s of route.steps) {
+    if (s.action.type === 'stairs') {
+      out.push(`${s.to.landmark ?? '階段'}で${s.action.toFloor}階へ`)
+    } else if (s.to.kind === 'entrance' && s.action.type !== 'arrive') {
+      out.push(`${s.to.landmark ?? '出入口'}を通る`)
+    }
+  }
+  return [...new Set(out)].slice(0, max)
+}
+
+/** 所要時間を「約○分」にする（1分未満も「約1分」） */
+export function minutesText(seconds: number): string {
+  return `約${Math.max(1, Math.round(seconds / 60))}分`
+}
