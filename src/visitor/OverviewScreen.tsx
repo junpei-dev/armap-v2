@@ -27,10 +27,10 @@ export default function OverviewScreen({ data, room, route, originLabel, onBack,
       </button>
 
       <CampusMap buildings={data.buildings} highlight={[room.building]}>
-        <RouteLayer route={route} />
+        <RouteLayer route={route} animate />
       </CampusMap>
       <p className="v-legend">
-        <span className="v-pin">◎</span> いまいる場所（{originLabel}）　<span className="v-goal">●</span> 目的地
+        <span className="v-pin">◎</span> いまいる場所（{originLabel}）　<span className="v-goal">●</span> 目的地　<span className="v-me">▶</span> 進む向き
         {route.floorsClimbed > 0 && '　点線は2階以上'}
       </p>
 

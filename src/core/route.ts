@@ -287,3 +287,22 @@ export function routeHighlights(route: Route, max = 3): string[] {
 export function minutesText(seconds: number): string {
   return `約${Math.max(1, Math.round(seconds / 60))}分`
 }
+
+/**
+ * 最初にどちらへ歩き出すか（QRの地点から出発するとき）
+ * QRは壁に貼ってあり、掲示面の向き（facing）は壁から外へ向かう方向。
+ * 利用者が「QR（壁）を背にして立つ」と、利用者の向き = facing。
+ * そこから最初の区間の向きへの差で「右へ」「左へ」などを決める。
+ * 例: 「事務室の窓口を背にして、右へ進みます」
+ */
+export function startHint(route: Route, checkpoints: Checkpoint[]): string | null {
+  const start = route.nodes[0]
+  const cp = checkpoints.find((c) => c.node === start.id)
+  // 最初に同じ階で動く区間（出発点から少しでも動くもの）を探す
+  const next = route.nodes.find((n, i) => i > 0 && n.floor === start.floor && distance(start.pos, n.pos) > 0.5)
+  if (!cp || !next) return null
+  const dir = turnDirection(cp.facing, planAngle(start.pos, next.pos))
+  const where = start.landmark ?? cp.place
+  const word = { straight: 'まっすぐ進みます', right: '右へ進みます', left: '左へ進みます', back: '壁の方へ進みます' }[dir]
+  return `${where}を背にして、${word}`
+}

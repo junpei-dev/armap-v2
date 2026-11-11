@@ -51,10 +51,12 @@ type Props = {
   onTap?: (p: Point) => void
   height?: number | string // 省略すると、敷地の縦横比に合わせる
   zoomTo?: string // この棟まで拡大する（空なら全体に戻す）
+  zoomToId?: string // この id の要素（RouteLayer の focusId など）まで拡大する
+  zoomKey?: string | number // 値が変わるたびに拡大し直す（案内の区間が進んだときなど）
   children?: ReactNode
 }
 
-export default function CampusMap({ buildings, highlight = [], focus, onTap, height, zoomTo, children }: Props) {
+export default function CampusMap({ buildings, highlight = [], focus, onTap, height, zoomTo, zoomToId, zoomKey, children }: Props) {
   const svgRef = useRef<SVGSVGElement>(null)
   const zoomRef = useRef<ReactZoomPanPinchContentRef>(null)
   const down = useRef<{ x: number; y: number } | null>(null)
@@ -85,9 +87,10 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
   useEffect(() => {
     const z = zoomRef.current
     if (!z) return
-    if (zoomTo) void z.zoomToElement(`campus-bldg-${zoomTo}`, { maxScale: 10 }, 400)
+    if (zoomToId) void z.zoomToElement(zoomToId, { maxScale: 6 }, 500)
+    else if (zoomTo) void z.zoomToElement(`campus-bldg-${zoomTo}`, { maxScale: 10 }, 400)
     else void z.resetTransform(300)
-  }, [zoomTo])
+  }, [zoomTo, zoomToId, zoomKey])
 
   const metersPerPx = box.w / widthPx / zoom
   // 回転の中心（地図の範囲の中心）。180度なら範囲がそのまま重なるので viewBox は変えなくてよい

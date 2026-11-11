@@ -6,6 +6,7 @@
   --map-line: #8c8f86;
   --map-label: #4d4f49;
   --route: #d9480f;
+  --me: #1c7ed6; /* 自分の位置（アニメーションの三角） */
 }
 
 .visitor {
@@ -231,4 +232,100 @@
   background: #fff;
   color: var(--color-main);
   border: 2px solid var(--color-main);
+}
+
+.v-me {
+  color: var(--me);
+}
+
+/* ③ 案内 */
+.v-guide-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.v-progress {
+  font-size: 15px;
+  color: var(--color-sub);
+}
+.v-instruction {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+.v-icon {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  background: var(--color-main);
+  color: #fff;
+  border-radius: 14px;
+  padding: 8px 4px;
+}
+.v-icon-stairs {
+  background: #7048e8;
+}
+.v-icon-arrive {
+  background: var(--route);
+}
+.v-icon-symbol {
+  font-size: 40px;
+  line-height: 1;
+}
+.v-icon-label {
+  font-size: 12px;
+  text-align: center;
+}
+.v-start-hint {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--me);
+}
+.v-instruction-text {
+  margin: 0;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1.5;
+}
+.v-instruction-floor {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--color-sub);
+}
+.v-actions-2 {
+  gap: 10px;
+}
+.v-actions-2 .v-secondary {
+  flex: 0 0 30%;
+}
+.v-actions-2 .v-primary {
+  flex: 1;
+}
+.v-actions button:disabled {
+  opacity: 0.4;
+}
+
+/* ⑥ 到着 */
+.v-arrived {
+  text-align: center;
+  padding-top: 48px;
+  justify-items: center;
+}
+.v-arrived h1 {
+  margin: 0;
+  font-size: 26px;
+}
+.v-arrived-mark {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--color-main);
+  color: #fff;
+  font-size: 52px;
+  line-height: 88px;
+}
+.v-arrived-desc {
+  font-size: 16px;
 }

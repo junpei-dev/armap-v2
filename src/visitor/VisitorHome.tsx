@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useReducer, useState } from 'react'
 import { fetchCampusData } from '../api/visitor.ts'
 import { placeNodes, START_CHECKPOINT_ID } from '../core/campus.ts'
-import { planRoute } from '../core/route.ts'
+import { planRoute, startHint } from '../core/route.ts'
 import type { CampusData } from '../types.ts'
+import ArrivedScreen from './ArrivedScreen.tsx'
 import GuideScreen from './GuideScreen.tsx'
 import OverviewScreen from './OverviewScreen.tsx'
 import StartScreen from './StartScreen.tsx'
@@ -32,7 +33,7 @@ export default function VisitorHome() {
   //   取り違えて止まるので、必ず { } で囲んで何も返さないようにする
   useEffect(() => {
     window.scrollTo(0, 0)
-  }, [state.screen])
+  }, [state.screen, state.step])
 
   const placed = useMemo(() => (data ? placeNodes(data) : []), [data])
 
@@ -98,7 +99,19 @@ export default function VisitorHome() {
         />
       )}
       {screen === 'guide' && room && route && (
-        <GuideScreen route={route} room={room} onBack={() => dispatch({ type: 'back' })} onFinish={() => dispatch({ type: 'reset' })} />
+        <GuideScreen
+          data={data}
+          route={route}
+          room={room}
+          step={state.step}
+          startHint={startHint(route, data.checkpoints)}
+          onNext={() => dispatch({ type: 'next', lastStep: route.steps.length - 1 })}
+          onPrev={() => dispatch({ type: 'prev' })}
+          onOverview={() => dispatch({ type: 'back' })}
+        />
+      )}
+      {screen === 'arrived' && room && (
+        <ArrivedScreen data={data} room={room} onBack={() => dispatch({ type: 'back' })} onFinish={() => dispatch({ type: 'reset' })} />
       )}
     </div>
   )

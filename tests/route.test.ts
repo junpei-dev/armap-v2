@@ -190,3 +190,19 @@ describe('routeHighlights（全体マップの下の要点）', () => {
     expect(routeHighlights(route)).toEqual(['ホール横の階段で2階へ'])
   })
 })
+
+describe('startHint（最初の向き）', () => {
+  it('事務室の窓口（壁は東向き＝90度）を背にすると、南の職員室へは右', async () => {
+    const { startHint } = await import('../src/core/route.ts')
+    const cps = [{ id: 'CP01', node: 'B1-1F-D-jimu', facing: 90, place: '事務室窓口の横の壁' }]
+    const toShokuin = planRoute(nodes, edges, cps, config, 'B1-1F-D-jimu', 'B1-1F-D-shokuin', '職員室')!
+    expect(startHint(toShokuin, cps)).toBe('事務室の窓口を背にして、右へ進みます')
+    const toKaigi = planRoute(nodes, edges, cps, config, 'B1-1F-D-jimu', 'B1-2F-D-kaigi', '会議室')!
+    expect(startHint(toKaigi, cps)).toBe('事務室の窓口を背にして、左へ進みます')
+  })
+  it('出発点がQRの地点でなければ出さない', async () => {
+    const { startHint } = await import('../src/core/route.ts')
+    const route = planRoute(nodes, edges, [], config, 'B1-1F-D-jimu', 'B1-1F-D-shokuin')!
+    expect(startHint(route, [])).toBeNull()
+  })
+})
