@@ -1,17 +1,20 @@
-import { useState } from 'react'
+import QRCode from 'qrcode'
+import { useEffect, useState } from 'react'
 import { START_CHECKPOINT_ID } from '../core/campus.ts'
 import type { Checkpoint } from '../types.ts'
 import { useAdmin } from './AdminContext.tsx'
 
 // QRチェックポイントの一覧と編集（設計書 5.2・7.4）
 // CP01（事務室）は経路の出発点になるので、最初に登録する
-// ※ QRコードの作成・印刷は教員の依頼があったときに行う（この画面では作らない）
+// ※ QRコードの印刷用シートは、教員の依頼があったときに作る。
+//   実機テスト用に、QRを画面に表示する機能だけを置く（2026-11-11 教員の依頼）
 
 const EMPTY: Checkpoint = { id: '', node: '', facing: 0, place: '' }
 
 export default function CheckpointsEditor() {
   const { data } = useAdmin()
   const [editing, setEditing] = useState<{ cp: Checkpoint; isNew: boolean } | null>(null)
+  const [showing, setShowing] = useState<Checkpoint | null>(null)
   const hasStart = data.checkpoints.some((c) => c.id === START_CHECKPOINT_ID)
 
   function nextId(): string {
@@ -43,6 +46,7 @@ export default function CheckpointsEditor() {
               <th>ノード</th>
               <th>掲示面の向き</th>
               <th>掲示場所</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -52,11 +56,24 @@ export default function CheckpointsEditor() {
                 <td>{c.node}</td>
                 <td>{c.facing}°</td>
                 <td>{c.place}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowing(c)
+                    }}
+                  >
+                    QRを表示
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </section>
+      {showing && <QrDialog cp={showing} onClose={() => setShowing(null)} />}
       {editing && (
         <CheckpointForm key={editing.cp.id} initial={editing.cp} isNew={editing.isNew} onDone={() => setEditing(null)} />
       )}
@@ -132,5 +149,48 @@ function CheckpointForm({ initial, isNew, onDone }: { initial: Checkpoint; isNew
         </div>
       </div>
     </section>
+  )
+}
+
+/**
+ * 実機テスト用に、チェックポイントのQRを画面に大きく表示する
+ * 中身は掲示用と同じ形のURL（このサイトの /?cp=CP01）。スマホの標準カメラで読むとアプリが開き、
+ * アプリの「QRコードを読む」で読むと、現在地と向きの基準合わせになる
+ */
+function QrDialog({ cp, onClose }: { cp: Checkpoint; onClose: () => void }) {
+  const { data } = useAdmin()
+  const url = `${window.location.origin}/?cp=${cp.id}`
+  const [img, setImg] = useState<string | null>(null)
+  const node = data.nodes.find((n) => n.id === cp.node)
+
+  useEffect(() => {
+    QRCode.toDataURL(url, { errorCorrectionLevel: 'M', margin: 4, width: 640 }).then(setImg, () => setImg(null))
+  }, [url])
+
+  // Esc キーで閉じる
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="qr-backdrop" role="dialog" aria-label={`${cp.id} のQRコード`} onClick={onClose}>
+      <div className="qr-dialog" onClick={(e) => e.stopPropagation()}>
+        <h2>
+          {cp.id}　{node?.landmark ?? cp.place}
+        </h2>
+        {img ? <img src={img} alt={`${cp.id} のQRコード`} className="qr-image" /> : <p>作成中…</p>}
+        <p className="hint">{url}</p>
+        <p className="hint">
+          実機テスト用の表示です（印刷用ではありません）。掲示面の向き {cp.facing}° の壁に貼ったつもりで、画面の正面に立って読んでください。
+        </p>
+        <button type="button" className="primary" onClick={onClose}>
+          閉じる
+        </button>
+      </div>
+    </div>
   )
 }
