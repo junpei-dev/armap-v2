@@ -17,10 +17,10 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
   const [changingOrigin, setChangingOrigin] = useState(false)
   const buildings = useMemo(() => new Map(data.buildings.map((b) => [b.id, b])), [data.buildings])
 
-  // 検索: 名前・図面上の名前・別名に含まれていれば表示（ひらがな・カタカナ・全角半角のゆれは吸収しない簡単なもの）
-  const q = query.trim()
+  // 検索: 名前・図面上の名前・別名に含まれていれば表示。全角・半角（３と3、ＣＡＤとCAD）の違いは同じとみなす
+  const q = norm(query.trim())
   const rooms = q
-    ? data.rooms.filter((r) => [r.name, r.drawingName, ...r.aliases].some((s) => s.includes(q)))
+    ? data.rooms.filter((r) => [r.name, r.drawingName, ...r.aliases].some((s) => norm(s).includes(q)))
     : data.rooms
 
   const grouped = ROOM_CATEGORIES.map((c) => ({ category: c, rooms: rooms.filter((r) => r.category === c) })).filter(
@@ -85,27 +85,66 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
         aria-label="部屋の名前で探す"
       />
 
-      {grouped.length === 0 && <p className="v-note">「{q}」に合う場所が見つかりません。</p>}
+      {grouped.length === 0 && <p className="v-note">「{query.trim()}」に合う場所が見つかりません。</p>}
       {grouped.map((g) => (
         <section key={g.category} className="v-group">
           <h3>{ROOM_CATEGORY_LABELS[g.category]}</h3>
-          <ul className="v-rooms">
-            {g.rooms.map((r) => (
-              <li key={r.id}>
-                <button type="button" onClick={() => onChooseRoom(r.id)}>
-                  <span className="v-room-name">{r.name}</span>
-                  <span className="v-room-place">{placeOf(r)}</span>
-                  <span className="v-chevron" aria-hidden>
-                    ›
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          {/* 部屋が多い分類（普通教室など）は、棟ごとに折りたたむ。検索中は全部見せる */}
+          {!q && g.rooms.length > GROUP_THRESHOLD ? (
+            byBuilding(g.rooms).map(([bid, rooms]) => (
+              <details key={bid} className="v-building">
+                <summary>
+                  {buildings.get(bid)?.name ?? `${bid}棟`}
+                  <span className="v-count">{rooms.length}室</span>
+                </summary>
+                <RoomList rooms={rooms} placeOf={(r) => `${r.floor}階`} onChoose={onChooseRoom} />
+              </details>
+            ))
+          ) : (
+            <RoomList rooms={sortRooms(g.rooms)} placeOf={placeOf} onChoose={onChooseRoom} />
+          )}
         </section>
       ))}
 
       <p className="v-note">歩きながら画面を見続けないでください。周りに気をつけてお進みください。</p>
     </main>
   )
+}
+
+/** これより多い分類は、棟ごとに折りたたむ */
+const GROUP_THRESHOLD = 8
+
+/** 階 → 名前 の順に並べる */
+function sortRooms(rooms: Room[]): Room[] {
+  return [...rooms].sort((a, b) => a.building.localeCompare(b.building, 'ja', { numeric: true }) || a.floor - b.floor || a.name.localeCompare(b.name, 'ja', { numeric: true }))
+}
+
+/** 棟ごとにまとめる（棟番号の順） */
+function byBuilding(rooms: Room[]): [string, Room[]][] {
+  const map = new Map<string, Room[]>()
+  for (const r of sortRooms(rooms)) map.set(r.building, [...(map.get(r.building) ?? []), r])
+  return [...map.entries()]
+}
+
+function RoomList({ rooms, placeOf, onChoose }: { rooms: Room[]; placeOf: (r: Room) => string; onChoose: (id: string) => void }) {
+  return (
+    <ul className="v-rooms">
+      {rooms.map((r) => (
+        <li key={r.id}>
+          <button type="button" onClick={() => onChoose(r.id)}>
+            <span className="v-room-name">{r.name}</span>
+            <span className="v-room-place">{placeOf(r)}</span>
+            <span className="v-chevron" aria-hidden>
+              ›
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** 全角・半角や大文字・小文字の違いをそろえる（３→3、Ｃ→c） */
+function norm(s: string): string {
+  return s.normalize('NFKC').toLowerCase().replace(/\s+/g, '')
 }

@@ -121,6 +121,23 @@ describe('validate', () => {
     expect(kinds).toEqual(['ノード OUT-2'])
   })
 
+  it('階段の上下で位置が3m以上ずれていれば注意', () => {
+    const raw = sample()
+    raw.nodes = raw.nodes.map((n) => (n.id === 'B1-2F-S1' ? { ...n, local: { u: 8.35, v: 18 } } : n))
+    expect(validate(raw).some((i) => i.message.includes('位置が約12m離れています'))).toBe(true)
+  })
+
+  it('部屋に登録されていない「部屋の入口」と、同じ名前の入口を知らせる', () => {
+    const raw = sample()
+    raw.nodes.push({ id: 'B1-2F-D01', building: '1', floor: 2, kind: 'door', local: { u: 8.35, v: 5 }, landmark: '会議室' })
+    raw.nodes.push({ id: 'B1-2F-D02', building: '1', floor: 2, kind: 'door', local: { u: 8.35, v: 59 }, landmark: '会議室' })
+    raw.edges.push({ from: 'B1-2F-S1', to: 'B1-2F-D01', kind: 'walk', oneway: false, closed: false })
+    raw.edges.push({ from: 'B1-2F-S1', to: 'B1-2F-D02', kind: 'walk', oneway: false, closed: false })
+    const msgs = validate(raw).map((i) => `${i.target} ${i.message}`)
+    expect(msgs.filter((m) => m.includes('部屋として登録されていません'))).toHaveLength(2) // 事務室の窓口はQRの地点なので除く
+    expect(msgs.some((m) => m.includes('同じ目印「会議室」の部屋の入口が2つ'))).toBe(true)
+  })
+
   it('newFatalIssues は、もともとあった致命的な問題を除く', () => {
     const before = [{ level: 'fatal' as const, target: 'A', message: 'x' }]
     const after = [...before, { level: 'fatal' as const, target: 'B', message: 'y' }]
@@ -150,5 +167,17 @@ describe('campus の関数', () => {
   it('ノードIDの提案は空いている番号を使う', () => {
     expect(suggestNodeId(new Set(['B1-1F-C01']), '1', 1, 'C')).toBe('B1-1F-C02')
     expect(suggestNodeId(new Set(), undefined, 1, 'O')).toBe('OUT-1')
+  })
+})
+
+describe('guessRoom（目印の名前から部屋を推測）', () => {
+  it('クラスの教室・職員室・特別教室', async () => {
+    const { guessRoom } = await import('../src/admin/BulkRooms.tsx')
+    expect(guessRoom('情報技術科3年')).toEqual({ name: '情報技術科3年', drawingName: '普通教室', category: 'general' })
+    expect(guessRoom('機械科３年の入口')).toEqual({ name: '機械科３年', drawingName: '普通教室', category: 'general' })
+    expect(guessRoom('機械科職員室入り口')).toEqual({ name: '機械科職員室', drawingName: '準備室', category: 'department' })
+    expect(guessRoom('選択６教室')).toEqual({ name: '選択６教室', drawingName: '選択教室', category: 'general' })
+    expect(guessRoom('製図室入口')).toEqual({ name: '製図室', drawingName: '製図室', category: 'special' })
+    expect(guessRoom('会議室')).toEqual({ name: '会議室', drawingName: '会議室', category: 'admin' })
   })
 })

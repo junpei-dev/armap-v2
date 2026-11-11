@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { reachableFrom } from '../core/campus.ts'
 import { ROOM_CATEGORIES, ROOM_CATEGORY_LABELS, type Room } from '../types.ts'
 import { useAdmin } from './AdminContext.tsx'
+import BulkRooms from './BulkRooms.tsx'
 
 // 部屋（目的地）の一覧と編集（要件 F-51、設計書 7.4）
 
@@ -27,6 +28,7 @@ export default function RoomsEditor() {
 
   return (
     <div className="split">
+      <BulkRooms />
       <section className="panel">
         <h2>
           部屋の一覧（{data.rooms.length}室）{' '}

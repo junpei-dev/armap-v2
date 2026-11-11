@@ -7,6 +7,9 @@ import { pointInPolygon } from './geometry.ts'
 //   fatal   … 保存しない（存在しないものを指している、など）
 //   warning … 保存する。管理コンソールの「注意」に一覧で出す
 
+/** 階段の上下の位置のずれがこれより大きければ注意（m） */
+export const STAIRS_GAP_M = 3
+
 export function validate(raw: CampusRaw): Issue[] {
   const issues: Issue[] = []
   const fatal = (target: string, message: string) => issues.push({ level: 'fatal', target, message })
@@ -76,6 +79,13 @@ export function validate(raw: CampusRaw): Issue[] {
       if (e.kind === 'stairs') {
         if (Math.abs(a.floor - c.floor) !== 1) warn(t, '階段の両端は、階が1つ違うノードにしてください')
         if (a.building !== c.building) warn(t, '階段の両端が別の棟になっています')
+        // 同じ階段なら、上の階と下の階でほぼ同じ位置にあるはず
+        const pa = nodePosition(a, buildings)
+        const pc = nodePosition(c, buildings)
+        if (pa && pc) {
+          const gap = Math.hypot(pa.x - pc.x, pa.y - pc.y)
+          if (gap > STAIRS_GAP_M) warn(t, `階段の上の階と下の階で、位置が約${Math.round(gap)}m離れています。同じ階段なら同じ位置に置いてください`)
+        }
       }
     }
   }
@@ -90,6 +100,27 @@ export function validate(raw: CampusRaw): Issue[] {
     if (!n) fatal(t, `存在しないノード（${r.node}）を入口にしています`)
     else if (n.floor !== r.floor || n.building !== r.building) warn(t, '入口のノードの棟・階が、部屋の棟・階と違います')
     if (!r.name.trim()) fatal(t, '来校者向けの名前が空です')
+  }
+
+  // --- 部屋の入口のノード ---
+  const roomNodes = new Set(raw.rooms.map((r) => r.node))
+  const cpNodes = new Set(raw.checkpoints.map((c) => c.node)) // 事務室の窓口などQRの地点は、目的地でなくてよい
+  const sameName = new Map<string, string[]>()
+  for (const n of raw.nodes) {
+    if (n.kind !== 'door') continue
+    if (!roomNodes.has(n.id) && !cpNodes.has(n.id)) {
+      warn(`ノード ${n.id}`, `「部屋の入口」ですが、部屋として登録されていません${n.landmark ? `（${n.landmark}）` : ''}。「部屋」タブの「まとめて登録」で登録できます`)
+    }
+    if (n.landmark) {
+      const key = `${n.building ?? '屋外'}|${n.landmark.trim()}`
+      sameName.set(key, [...(sameName.get(key) ?? []), n.id])
+    }
+  }
+  for (const [key, ids] of sameName) {
+    if (ids.length > 1) {
+      const [b, name] = key.split('|')
+      warn(`ノード ${ids.join('・')}`, `${b === '屋外' ? '屋外' : `棟 ${b}`}に、同じ目印「${name}」の部屋の入口が${ids.length}つあります。名前が正しいか確かめてください`)
+    }
   }
 
   // --- チェックポイント ---

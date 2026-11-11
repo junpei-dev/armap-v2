@@ -489,3 +489,31 @@
 .v-marker-arrow.lost {
   opacity: 0.35;
 }
+
+/* 部屋が多い分類の、棟ごとの折りたたみ */
+.v-building {
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: #fff;
+  margin-bottom: 8px;
+}
+.v-building > summary {
+  padding: 14px 16px;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.v-building[open] > summary {
+  border-bottom: 1px solid var(--color-line);
+}
+.v-building .v-rooms {
+  padding: 8px;
+}
+.v-count {
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--color-sub);
+}
