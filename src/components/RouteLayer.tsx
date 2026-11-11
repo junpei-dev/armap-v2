@@ -1,5 +1,5 @@
 import type { Route } from '../core/route.ts'
-import { useMapScale } from './CampusMap.tsx'
+import { useMapScale, useUpright } from './CampusMap.tsx'
 
 // 全体マップに道順を描く（要件 F-16・F-27）。CampusMap の children に入れて使う
 // ・1階の区間は実線、2階以上の区間は点線にして「○F」を添える
@@ -8,6 +8,7 @@ import { useMapScale } from './CampusMap.tsx'
 
 export default function RouteLayer({ route, activeStep }: { route: Route; activeStep?: number }) {
   const px = useMapScale()
+  const upright = useUpright()
   const start = route.nodes[0]
   const goal = route.nodes[route.nodes.length - 1]
 
@@ -40,7 +41,7 @@ export default function RouteLayer({ route, activeStep }: { route: Route; active
             {/* 階が変わる所に「2F」などの印 */}
             {pts.slice(1).map((b, k) =>
               pts[k].floor !== b.floor ? (
-                <g key={`f${k}`}>
+                <g key={`f${k}`} transform={upright(b.pos)}>
                   <rect x={b.pos.x + 5 * px} y={b.pos.y - 8 * px} width={22 * px} height={14 * px} rx={3 * px} fill="var(--route, #d9480f)" />
                   <text x={b.pos.x + 16 * px} y={b.pos.y - 1 * px} fontSize={10 * px} fill="#fff" textAnchor="middle" dominantBaseline="central">
                     {b.floor}F

@@ -8,13 +8,28 @@ import type { Building, Point } from '../types.ts'
 // ・指（またはマウスのホイール）で拡大・移動できる
 // ・地図をタップすると、その位置（メートル）を onTap で返す（ドラッグとは区別する）
 // ・中に重ねる印（ノードなど）は children に SVG で書く。useMapScale() で「画面の1ピクセルが何mか」が分かる
+// ・地図は配置図を MAP_ROTATION 度回して表示する（2026-11-11 先生の指示: 正門が下に来て、進む方向が上になる向き）
+//   データの座標はそのまま。文字や向きのある印は useUpright() で逆に回して正立させる
 
 const MARGIN = 8 // 地図の余白（m）
 
+/** 配置図を何度回して表示するか。正門（配置図の右上）が画面の左下に来るよう180度 */
+export const MAP_ROTATION = 180
+
+type MapView = { px: number; upright: (p: Point) => string }
+const MapContext = createContext<MapView>({ px: 1, upright: () => '' })
+
 /** 画面の1ピクセルが何メートルか（印の大きさを拡大率に関係なく一定にするため） */
-const ScaleContext = createContext(1)
 export function useMapScale(): number {
-  return useContext(ScaleContext)
+  return useContext(MapContext).px
+}
+
+/**
+ * 文字や向きのある印を、地図の回転に関係なく正立させる変形を返す
+ * 使い方: <text transform={upright(p)} ...> ／ <g transform={upright(p)}> … </g>
+ */
+export function useUpright(): (p: Point) => string {
+  return useContext(MapContext).upright
 }
 
 type Props = {
@@ -53,6 +68,13 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
   }, [])
 
   const metersPerPx = box.w / widthPx / zoom
+  // 回転の中心（地図の範囲の中心）。180度なら範囲がそのまま重なるので viewBox は変えなくてよい
+  const cx = box.x + box.w / 2
+  const cy = box.y + box.h / 2
+  const view = useMemo<MapView>(
+    () => ({ px: metersPerPx, upright: (p) => (MAP_ROTATION ? `rotate(${-MAP_ROTATION} ${p.x} ${p.y})` : '') }),
+    [metersPerPx],
+  )
 
   /** 画面の座標 → 地図の座標（m）。拡大・移動の CSS 変形を含めて計算する */
   function toMap(clientX: number, clientY: number): Point | null {
@@ -62,7 +84,13 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
     const scale = Math.min(r.width / box.w, r.height / box.h) // preserveAspectRatio="xMidYMid meet"
     const offX = (r.width - box.w * scale) / 2
     const offY = (r.height - box.h * scale) / 2
-    return { x: box.x + (clientX - r.left - offX) / scale, y: box.y + (clientY - r.top - offY) / scale }
+    const vx = box.x + (clientX - r.left - offX) / scale
+    const vy = box.y + (clientY - r.top - offY) / scale
+    // 表示は中心まわりに回してあるので、逆に回してデータの座標に戻す
+    const t = (-MAP_ROTATION * Math.PI) / 180
+    const dx = vx - cx
+    const dy = vy - cy
+    return { x: cx + dx * Math.cos(t) - dy * Math.sin(t), y: cy + dx * Math.sin(t) + dy * Math.cos(t) }
   }
 
   return (
@@ -90,6 +118,7 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
             }}
           >
             <rect x={box.x} y={box.y} width={box.w} height={box.h} fill="var(--map-ground)" />
+            <g transform={`rotate(${MAP_ROTATION} ${cx} ${cy})`}>
             {buildings.map((b) => {
               const label = b.label ?? centroid(b.outline)
               const isFocus = b.id === focus
@@ -108,6 +137,7 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
                     textAnchor="middle"
                     dominantBaseline="central"
                     fill="var(--map-label)"
+                    transform={view.upright(label)}
                     style={{ pointerEvents: 'none', userSelect: 'none' }}
                   >
                     {b.id}
@@ -115,7 +145,8 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
                 </g>
               )
             })}
-            <ScaleContext.Provider value={metersPerPx}>{children}</ScaleContext.Provider>
+            <MapContext.Provider value={view}>{children}</MapContext.Provider>
+            </g>
           </svg>
         </TransformComponent>
       </TransformWrapper>

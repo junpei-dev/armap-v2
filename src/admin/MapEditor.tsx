@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import CampusMap, { useMapScale } from '../components/CampusMap.tsx'
+import CampusMap, { useMapScale, useUpright } from '../components/CampusMap.tsx'
 import { inputFromTap, nodePosition, placeNodes, suggestNodeId } from '../core/campus.ts'
 import { distance, distanceToSegment, pointInPolygon } from '../core/geometry.ts'
 import {
@@ -304,6 +304,7 @@ function NodesLayer({
   startNode: string | null
 }) {
   const px = useMapScale()
+  const upright = useUpright()
   // ほかの階 → この階 の順に描いて、この階のノードを上に重ねる
   const sorted = [...nodes].sort((a, b) => Number(a.floor === floor) - Number(b.floor === floor))
   return (
@@ -327,7 +328,7 @@ function NodesLayer({
               </title>
             </circle>
             {n.kind === 'stairs' && here && (
-              <text x={n.pos.x} y={n.pos.y} fontSize={7 * px} fill="#fff" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: 'none' }}>
+              <text x={n.pos.x} y={n.pos.y} transform={upright(n.pos)} fontSize={7 * px} fill="#fff" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: 'none' }}>
                 S
               </text>
             )}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import CampusMap, { useMapScale } from '../components/CampusMap.tsx'
+import CampusMap, { useMapScale, useUpright } from '../components/CampusMap.tsx'
 import { pointInPolygon } from '../core/geometry.ts'
 import { type Point, SURVEY_KIND_LABELS, SURVEY_KINDS, type SurveyKind, type SurveyNote } from '../types.ts'
 import { useAdmin } from './AdminContext.tsx'
@@ -159,12 +159,14 @@ export default function SurveyNotes() {
 /** 記録済みのメモの印（三角形） */
 export function NoteMark({ note }: { note: SurveyNote }) {
   const px = useMapScale()
+  const upright = useUpright()
   const s = 7 * px
   const { x, y } = note.pos
   return (
     <polygon
       points={`${x},${y - s} ${x - s},${y + s * 0.8} ${x + s},${y + s * 0.8}`}
       fill="var(--survey)"
+      transform={upright(note.pos)}
       opacity={note.resolved ? 0.3 : 0.9}
       stroke="#fff"
       strokeWidth={1 * px}
