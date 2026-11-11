@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import CampusMap, { useMapScale, useUpright } from '../components/CampusMap.tsx'
-import { inputFromTap, nodePosition, placeNodes, suggestNodeId } from '../core/campus.ts'
+import CampusMap, { NO_PAN_CLASS, useMapPoint, useMapScale, useUpright } from '../components/CampusMap.tsx'
+import { inputFromTap, nodePosition, placeNodes, round2, suggestNodeId } from '../core/campus.ts'
 import { distance, distanceToSegment, pointInPolygon } from '../core/geometry.ts'
 import {
   type Building,
@@ -20,7 +20,7 @@ import { NoteMark } from './SurveyNotes.tsx'
 
 type Mode = 'select' | 'add' | 'edge' | 'delete'
 const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: 'select', label: '選択', hint: 'ノードをタップすると、右の欄で直せます' },
+  { id: 'select', label: '選択', hint: 'ノードはドラッグで動かせます（隣のノードと縦・横がそろう位置に吸い付きます）。タップすると右の欄で直せます' },
   { id: 'add', label: 'ノード追加', hint: 'ノードを置きたい場所をタップしてください（棟の中なら、その棟のノードになります）' },
   { id: 'edge', label: '辺', hint: 'つなぎたい2つのノードを順にタップします。階段は、下の階の階段 → 階を切り替え → 上の階の階段' },
   { id: 'delete', label: '削除', hint: '消したいノードか辺をタップしてください' },
@@ -35,9 +35,15 @@ export default function MapEditor() {
   const [draft, setDraft] = useState<GraphNode | null>(null)
   const [edgeFrom, setEdgeFrom] = useState<string | null>(null)
   const [scale, setScale] = useState(1) // 画面1ピクセルが何mか（タップの判定に使う）
+  const [drag, setDrag] = useState<{ id: string; pos: Point } | null>(null) // ドラッグ中のノードと位置
 
   const buildings = useMemo(() => new Map(data.buildings.map((b) => [b.id, b])), [data.buildings])
-  const placed = useMemo(() => placeNodes(data), [data])
+  const savedPlaced = useMemo(() => placeNodes(data), [data])
+  // ドラッグ中のノードだけ、指の位置に置きかえて描く
+  const placed = useMemo(
+    () => (drag ? savedPlaced.map((n) => (n.id === drag.id ? { ...n, pos: drag.pos } : n)) : savedPlaced),
+    [savedPlaced, drag],
+  )
   const placedById = useMemo(() => new Map(placed.map((n) => [n.id, n])), [placed])
   const maxFloor = Math.max(1, ...data.buildings.map((b) => b.floors))
   const onFloor = (n: GraphNode) => n.floor === floor
@@ -72,6 +78,37 @@ export default function MapEditor() {
       }
     }
     return best
+  }
+
+  /** つながっている隣のノードと、縦・横がほぼそろったら（0.6m以内）ぴったりそろえる */
+  function snap(id: string, p: Point): Point {
+    const node = savedPlaced.find((n) => n.id === id)
+    const neighbors = data.edges
+      .filter((e) => e.from === id || e.to === id)
+      .map((e) => savedPlaced.find((n) => n.id === (e.from === id ? e.to : e.from)))
+      .filter((n): n is PlacedNode => !!n && n.floor === node?.floor)
+    let { x, y } = p
+    for (const n of neighbors) {
+      if (Math.abs(n.pos.x - x) < 0.6) x = n.pos.x
+      if (Math.abs(n.pos.y - y) < 0.6) y = n.pos.y
+    }
+    return { x: round2(x), y: round2(y) }
+  }
+
+  /** ドラッグを終えた位置で保存する。棟の中なら u・v、屋外なら x・y にする */
+  async function dropNode(id: string, p: Point) {
+    const node = data.nodes.find((n) => n.id === id)
+    if (!node) return
+    const value: GraphNode = {
+      id: node.id,
+      building: node.building,
+      floor: node.floor,
+      kind: node.kind,
+      landmark: node.landmark,
+      ...inputFromTap(p, node.building ? buildings.get(node.building) : undefined),
+    }
+    await saveAndReload('nodes', 'update', value, `ノード ${id} を動かしました`)
+    setDrag(null)
   }
 
   async function onTap(p: Point) {
@@ -182,7 +219,7 @@ export default function MapEditor() {
             </select>
           </label>
           <label>
-            担当の棟{' '}
+            担当の棟（選ぶと拡大）{' '}
             <select value={focus} onChange={(e) => setFocus(e.target.value)}>
               <option value="">（なし）</option>
               {data.buildings.map((b) => (
@@ -205,7 +242,7 @@ export default function MapEditor() {
             </>
           )}
         </p>
-        <CampusMap buildings={data.buildings} focus={focus || undefined} onTap={onTap} height="min(70vh, 640px)">
+        <CampusMap buildings={data.buildings} focus={focus || undefined} zoomTo={focus} onTap={onTap} height="min(70vh, 640px)">
           <ScaleProbe onScale={setScale} />
           <EdgesLayer edges={data.edges} placedById={placedById} floor={floor} />
           {data.survey.filter((s) => !s.resolved && s.floor === floor).map((s) => (
@@ -216,6 +253,14 @@ export default function MapEditor() {
             floor={floor}
             selected={draft ? null : (selectedId ?? edgeFrom)}
             startNode={data.startNode}
+            draggable={mode === 'select'}
+            onGrab={(id) => {
+              setDraft(null)
+              setSelectedId(id)
+            }}
+            onDrag={(id, p) => setDrag({ id, pos: snap(id, p) })}
+            onDrop={(id, p) => dropNode(id, snap(id, p))}
+            onCancel={() => setDrag(null)}
           />
           {draft && <DraftNode node={draft} building={draft.building ? buildings.get(draft.building) : undefined} />}
         </CampusMap>
@@ -297,14 +342,27 @@ function NodesLayer({
   floor,
   selected,
   startNode,
+  draggable,
+  onGrab,
+  onDrag,
+  onDrop,
+  onCancel,
 }: {
   nodes: PlacedNode[]
   floor: number
   selected: string | null
   startNode: string | null
+  draggable: boolean
+  onGrab: (id: string) => void
+  onDrag: (id: string, p: Point) => void
+  onDrop: (id: string, p: Point) => void
+  onCancel: () => void
 }) {
   const px = useMapScale()
   const upright = useUpright()
+  const toMap = useMapPoint()
+  // 押した位置（3ピクセル以上動いたらドラッグとみなす）
+  const [press, setPress] = useState<{ id: string; x: number; y: number; moved: boolean } | null>(null)
   // ほかの階 → この階 の順に描いて、この階のノードを上に重ねる
   const sorted = [...nodes].sort((a, b) => Number(a.floor === floor) - Number(b.floor === floor))
   return (
@@ -316,6 +374,40 @@ function NodesLayer({
           <g key={n.id}>
             {n.id === startNode && <circle cx={n.pos.x} cy={n.pos.y} r={9 * px} fill="none" stroke="var(--node)" strokeWidth={1.5 * px} />}
             <circle
+              className={draggable && here ? NO_PAN_CLASS : undefined}
+              style={draggable && here ? { cursor: press?.moved ? 'grabbing' : 'grab' } : undefined}
+              onPointerDown={(e) => {
+                if (!draggable || !here) return
+                // 地図のタップ・移動として扱わせない
+                e.stopPropagation()
+                // 指が円の外に出ても動きを受け取り続ける（できない環境では無視してよい）
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                } catch {
+                  /* 何もしない */
+                }
+                setPress({ id: n.id, x: e.clientX, y: e.clientY, moved: false })
+                onGrab(n.id)
+              }}
+              onPointerMove={(e) => {
+                if (!press || press.id !== n.id) return
+                if (!press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 3) return
+                if (!press.moved) setPress({ ...press, moved: true })
+                const p = toMap(e.clientX, e.clientY)
+                if (p) onDrag(n.id, p)
+              }}
+              onPointerUp={(e) => {
+                if (!press || press.id !== n.id) return
+                e.stopPropagation()
+                const p = toMap(e.clientX, e.clientY)
+                if (press.moved && p) onDrop(n.id, p)
+                setPress(null)
+              }}
+              onPointerCancel={() => {
+                // 電話の着信などで操作が中断されたら、動かす前の位置に戻す（保存しない）
+                setPress(null)
+                onCancel()
+              }}
               cx={n.pos.x}
               cy={n.pos.y}
               r={(isSel ? 6.5 : 5) * px}
