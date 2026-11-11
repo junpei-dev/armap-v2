@@ -476,3 +476,16 @@
   text-align: center;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
 }
+
+/* QRを基準にした矢印（マーカーAR）。左上を原点に、matrix3d でQRの壁に合わせて変形する */
+.v-marker-arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.v-marker-arrow.lost {
+  opacity: 0.35;
+}

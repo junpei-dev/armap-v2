@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { fetchCampusData } from '../api/visitor.ts'
 import { placeNodes, START_CHECKPOINT_ID } from '../core/campus.ts'
+import { angleDiff, normalizeAngle } from '../core/geometry.ts'
 import { anchorOffset, confidence, planHeading } from '../core/heading.ts'
 import { planRoute, startHint, stepBearing, stepForNode } from '../core/route.ts'
 import {
@@ -32,6 +33,7 @@ export default function VisitorHome() {
   const [overlay, setOverlay] = useState<'none' | 'camera' | 'scan'>('none')
   const [toast, setToast] = useState<string | null>(null)
   // QRで向きを合わせた記録（offset: 端末の角度→図面角度の差、step: そのときの区間、at: 時刻）
+  const closeOverlay = useCallback(() => setOverlay('none'), [])
   const [anchor, setAnchor] = useState<{ offset: number; step: number; at: number } | null>(null)
   const { heading, headingRef, working } = useDeviceHeading(state.screen === 'guide' && sensor === 'granted')
 
@@ -84,7 +86,6 @@ export default function VisitorHome() {
   /** QRを読んだ（要件 F-30〜F-32）: 向きの基準を合わせ、その地点の区間へ。経路の外なら引き直す */
   const onScanned = useCallback(
     (cpId: string) => {
-      setOverlay((o) => (o === 'scan' ? 'none' : o))
       const cp = data?.checkpoints.find((c) => c.id === cpId)
       if (!cp) {
         setToast('このQRコードは登録されていません')
@@ -103,6 +104,21 @@ export default function VisitorHome() {
       setToast(`現在地を「${node?.landmark ?? cp.place}」に合わせました`)
     },
     [data, route, headingRef],
+  )
+
+  /**
+   * マーカーAR用: そのQRの地点から最初に進む向きを、QR（壁）を見て立った人から見た角度で返す
+   * 壁を見ている人の向き = 掲示面の向き + 180。そこから最初の区間の向きへの差
+   */
+  const arrowFor = useCallback(
+    (cpId: string): number | null => {
+      const cp = data?.checkpoints.find((c) => c.id === cpId)
+      if (!data || !cp || !room) return null
+      const r = planRoute(placed, data.edges, data.checkpoints, data.config, cp.node, room.node, room.name)
+      const bearing = r && r.steps.length > 0 ? stepBearing(r.steps[0]) : null
+      return bearing === null ? null : angleDiff(normalizeAngle(cp.facing + 180), bearing)
+    },
+    [data, placed, room],
   )
 
   if (error) {
@@ -194,7 +210,7 @@ export default function VisitorHome() {
           onClose={() => setOverlay('none')}
         />
       )}
-      {overlay === 'scan' && <ScanOverlay onFound={onScanned} onClose={() => setOverlay('none')} />}
+      {overlay === 'scan' && <ScanOverlay onFound={onScanned} onClose={closeOverlay} arrowFor={arrowFor} />}
       {toast && (
         <div className="v-toast" role="status">
           {toast}
