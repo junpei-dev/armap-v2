@@ -111,6 +111,16 @@ describe('validate', () => {
     expect(validate(raw).some((i) => i.target === 'ノード B1-1F-C09' && i.message.includes('外形の外'))).toBe(true)
   })
 
+  it('屋外に置いた出入口には注意を出さない（廊下の種類なら出す）', () => {
+    const raw = sample()
+    raw.nodes.push({ id: 'OUT-1', floor: 1, kind: 'entrance', pos: { x: 99, y: 80 } })
+    raw.nodes.push({ id: 'OUT-2', floor: 1, kind: 'corridor', pos: { x: 98, y: 80 } })
+    raw.edges.push({ from: 'OUT-1', to: 'B1-1F-D-jimu', kind: 'walk', oneway: false, closed: false })
+    raw.edges.push({ from: 'OUT-2', to: 'OUT-1', kind: 'walk', oneway: false, closed: false })
+    const kinds = validate(raw).filter((i) => i.message.includes('種類が「屋外」ではありません')).map((i) => i.target)
+    expect(kinds).toEqual(['ノード OUT-2'])
+  })
+
   it('newFatalIssues は、もともとあった致命的な問題を除く', () => {
     const before = [{ level: 'fatal' as const, target: 'A', message: 'x' }]
     const after = [...before, { level: 'fatal' as const, target: 'B', message: 'y' }]

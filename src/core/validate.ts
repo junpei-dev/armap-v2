@@ -47,7 +47,10 @@ export function validate(raw: CampusRaw): Issue[] {
     if (n.local && !n.building) fatal(t, 'u・v で位置を入れるときは棟を選んでください')
     if (n.local && b && !placementOf(b)) fatal(t, `棟 ${b.id} は平面図の置き方（基準点・向き）が未設定なので、u・v は使えません`)
     if (!connected.has(n.id)) warn(t, 'どの辺ともつながっていません')
-    if (!n.building && n.kind !== 'outdoor') warn(t, '屋外のノードですが、種類が「屋外」ではありません')
+    // 棟の出入口は外形の線の上や少し外に置くので、屋外にあってもよい
+    if (!n.building && n.kind !== 'outdoor' && n.kind !== 'entrance') {
+      warn(t, '屋外のノードですが、種類が「屋外」ではありません')
+    }
 
     // 屋内ノードが棟の外にないか
     const pos = nodePosition(n, buildings)
