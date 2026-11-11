@@ -16,6 +16,8 @@ export type VisitorAction =
   | { type: 'startGuide' }
   | { type: 'next'; lastStep: number } // 次の区間へ。最後の区間なら到着
   | { type: 'prev' } // 前の区間へ（押し間違い対策・要件 F-25）
+  | { type: 'jumpTo'; step: number } // QRを読んだ地点の区間へ
+  | { type: 'rerouteFrom'; cp: string } // 経路の外のQRを読んだ: その地点から引き直す
   | { type: 'back' } // 1つ前の画面へ
   | { type: 'reset' }
 
@@ -34,6 +36,10 @@ export function visitorReducer(state: VisitorState, action: VisitorAction): Visi
       return state.step >= action.lastStep ? { ...state, screen: 'arrived' } : { ...state, step: state.step + 1 }
     case 'prev':
       return { ...state, step: Math.max(0, state.step - 1) }
+    case 'jumpTo':
+      return { ...state, screen: 'guide', step: action.step }
+    case 'rerouteFrom':
+      return { ...state, screen: 'guide', originCp: action.cp, step: 0 }
     case 'back':
       if (state.screen === 'arrived') return { ...state, screen: 'guide' }
       return { ...state, screen: state.screen === 'guide' ? 'overview' : 'start' }

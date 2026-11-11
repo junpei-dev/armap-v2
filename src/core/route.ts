@@ -306,3 +306,29 @@ export function startHint(route: Route, checkpoints: Checkpoint[]): string | nul
   const word = { straight: 'まっすぐ進みます', right: '右へ進みます', left: '左へ進みます', back: '壁の方へ進みます' }[dir]
   return `${where}を背にして、${word}`
 }
+
+/**
+ * QRを読んだ地点が、経路のどの区間にあたるか（要件 F-30・F-32）
+ * ・その地点から始まる区間があればその番号
+ * ・区間の途中にあればその区間の番号
+ * ・経路の上に無ければ null（呼び出し側で、その地点から経路を引き直す）
+ */
+export function stepForNode(route: Route, nodeId: string): number | null {
+  const starts = route.steps.findIndex((s) => s.from.id === nodeId)
+  if (starts >= 0) return starts
+  const inside = route.steps.findIndex((s) => s.nodes.slice(0, -1).some((n) => n.id === nodeId))
+  if (inside >= 0) return inside
+  // 目的地そのもの
+  const last = route.steps.length - 1
+  return route.steps[last]?.to.id === nodeId ? last : null
+}
+
+/** 今の区間で、最初に進む向き（図面角度）。カメラ表示の矢印に使う。動かない区間なら null */
+export function stepBearing(step: Step): number | null {
+  for (let i = 1; i < step.nodes.length; i++) {
+    const a = step.nodes[i - 1]
+    const b = step.nodes[i]
+    if (a.floor === b.floor && distance(a.pos, b.pos) > 0.5) return planAngle(a.pos, b.pos)
+  }
+  return null
+}

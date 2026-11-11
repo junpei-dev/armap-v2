@@ -329,3 +329,150 @@
 .v-arrived-desc {
   font-size: 16px;
 }
+
+/* ④ カメラ表示・⑤ QR読み取り（全画面に重ねる） */
+.v-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  color: #fff;
+}
+.v-camera-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.v-scan-frame {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: min(64vw, 280px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 4px solid #fff;
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.35);
+}
+.v-overlay-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 60%, rgba(0, 0, 0, 0));
+  display: grid;
+  gap: 10px;
+}
+.v-overlay-text {
+  margin: 0;
+  font-size: 19px;
+  font-weight: bold;
+  text-align: center;
+}
+.v-overlay-sub {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  opacity: 0.85;
+}
+.v-ar-top {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.v-chip {
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+.v-chip-warn {
+  background: rgba(217, 72, 15, 0.85);
+}
+.v-ar-center {
+  position: absolute;
+  top: 38%;
+  left: 24px;
+  right: 24px;
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 17px;
+  display: grid;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 16px;
+  border-radius: 14px;
+}
+.v-ar-arrow {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  transition: opacity 0.3s;
+}
+.v-ar-arrow > div {
+  transition: transform 0.12s linear;
+}
+.v-ar-arrow.low {
+  opacity: 0.45;
+}
+.v-ar-buttons {
+  display: flex;
+  gap: 10px;
+}
+.v-ar-buttons .v-secondary {
+  flex: 0 0 36%;
+  background: rgba(255, 255, 255, 0.9);
+}
+.v-ar-buttons .v-primary {
+  flex: 1;
+}
+
+/* 案内画面の「カメラ」「QR」ボタン */
+.v-tools {
+  display: flex;
+  gap: 8px;
+}
+.v-tools button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--color-line);
+  background: #fff;
+  font-size: 15px;
+}
+
+/* ⑦ 許可のお願い */
+.v-permission h1 {
+  font-size: 22px;
+  margin: 8px 0 0;
+}
+.v-permission p,
+.v-permission li {
+  font-size: 16px;
+}
+
+.v-toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  top: calc(12px + env(safe-area-inset-top));
+  z-index: 60;
+  background: var(--color-main);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 15px;
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}

@@ -16,9 +16,11 @@ type Props = {
   onNext: () => void
   onPrev: () => void
   onOverview: () => void
+  onCamera: () => void
+  onScan: () => void
 }
 
-export default function GuideScreen({ data, route, room, step, startHint, onNext, onPrev, onOverview }: Props) {
+export default function GuideScreen({ data, route, room, step, startHint, onNext, onPrev, onOverview, onCamera, onScan }: Props) {
   const s = route.steps[Math.min(step, route.steps.length - 1)]
   const isLast = step >= route.steps.length - 1
 
@@ -43,6 +45,15 @@ export default function GuideScreen({ data, route, room, step, startHint, onNext
           </p>
         </div>
       </section>
+
+      <div className="v-tools">
+        <button type="button" onClick={onCamera}>
+          カメラで方向を見る
+        </button>
+        <button type="button" onClick={onScan}>
+          QRコードを読む
+        </button>
+      </div>
 
       <CampusMap
         buildings={data.buildings}

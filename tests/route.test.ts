@@ -206,3 +206,20 @@ describe('startHint（最初の向き）', () => {
     expect(startHint(route, [])).toBeNull()
   })
 })
+
+describe('stepForNode・stepBearing', () => {
+  it('QRの地点が経路のどの区間かを返す。経路の外なら null', async () => {
+    const { stepForNode } = await import('../src/core/route.ts')
+    const route = planRoute(nodes, edges, [], config, 'B1-1F-D-jimu', 'B1-2F-D-kaigi', '会議室')!
+    expect(stepForNode(route, 'B1-1F-D-jimu')).toBe(0)
+    expect(stepForNode(route, 'B1-2F-S1')).toBe(1)
+    expect(stepForNode(route, 'B1-2F-C01')).toBe(1)
+    expect(stepForNode(route, 'B1-1F-D-shokuin')).toBeNull()
+  })
+  it('区間の最初に進む向き（会議室へは北＝0度）', async () => {
+    const { stepBearing } = await import('../src/core/route.ts')
+    const route = planRoute(nodes, edges, [], config, 'B1-1F-D-jimu', 'B1-2F-D-kaigi', '会議室')!
+    expect(stepBearing(route.steps[0])).toBeCloseTo(0)
+    expect(stepBearing(route.steps[1])).toBeCloseTo(0)
+  })
+})

@@ -1,11 +1,21 @@
-import { useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { fetchCampusData } from '../api/visitor.ts'
 import { placeNodes, START_CHECKPOINT_ID } from '../core/campus.ts'
-import { planRoute, startHint } from '../core/route.ts'
+import { anchorOffset, confidence, planHeading } from '../core/heading.ts'
+import { planRoute, startHint, stepBearing, stepForNode } from '../core/route.ts'
+import {
+  requestOrientationPermission,
+  savedSensorStatus,
+  type SensorStatus,
+  useDeviceHeading,
+} from '../hooks/useDeviceHeading.ts'
 import type { CampusData } from '../types.ts'
 import ArrivedScreen from './ArrivedScreen.tsx'
+import CameraOverlay from './CameraOverlay.tsx'
 import GuideScreen from './GuideScreen.tsx'
 import OverviewScreen from './OverviewScreen.tsx'
+import PermissionScreen from './PermissionScreen.tsx'
+import ScanOverlay from './ScanOverlay.tsx'
 import StartScreen from './StartScreen.tsx'
 import { initialState, saveState, visitorReducer } from './state.ts'
 import './visitor.css'
@@ -17,6 +27,13 @@ export default function VisitorHome() {
   const [state, dispatch] = useReducer(visitorReducer, window.location.search, initialState)
   const [data, setData] = useState<CampusData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [sensor, setSensor] = useState<SensorStatus>(savedSensorStatus)
+  const [askPermission, setAskPermission] = useState(false) // ⑦ 許可のお願いを出しているか
+  const [overlay, setOverlay] = useState<'none' | 'camera' | 'scan'>('none')
+  const [toast, setToast] = useState<string | null>(null)
+  // QRで向きを合わせた記録（offset: 端末の角度→図面角度の差、step: そのときの区間、at: 時刻）
+  const [anchor, setAnchor] = useState<{ offset: number; step: number; at: number } | null>(null)
+  const { heading, headingRef, working } = useDeviceHeading(state.screen === 'guide' && sensor === 'granted')
 
   useEffect(() => {
     fetchCampusData().then(setData, (e: Error) => setError(e.message))
@@ -27,6 +44,13 @@ export default function VisitorHome() {
     saveState(state)
     if (window.location.search) history.replaceState(null, '', window.location.pathname)
   }, [state])
+
+  // お知らせは4秒で消す
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   // 画面が変わったら一番上から表示する
   // ※ 新しいブラウザでは scrollTo が Promise を返す。そのまま返すと React が「後片付けの関数」と
@@ -55,6 +79,30 @@ export default function VisitorHome() {
         ? planRoute(placed, data.edges, data.checkpoints, data.config, origin.node.id, room.node, room.name)
         : null,
     [data, placed, origin, room],
+  )
+
+  /** QRを読んだ（要件 F-30〜F-32）: 向きの基準を合わせ、その地点の区間へ。経路の外なら引き直す */
+  const onScanned = useCallback(
+    (cpId: string) => {
+      setOverlay((o) => (o === 'scan' ? 'none' : o))
+      const cp = data?.checkpoints.find((c) => c.id === cpId)
+      if (!cp) {
+        setToast('このQRコードは登録されていません')
+        return
+      }
+      let step = 0
+      if (route && stepForNode(route, cp.node) !== null) {
+        step = stepForNode(route, cp.node)!
+        dispatch({ type: 'jumpTo', step })
+      } else {
+        dispatch({ type: 'rerouteFrom', cp: cp.id })
+      }
+      const h = headingRef.current
+      if (h !== null) setAnchor({ offset: anchorOffset(cp.facing, h), step, at: Date.now() })
+      const node = data?.nodes.find((n) => n.id === cp.node)
+      setToast(`現在地を「${node?.landmark ?? cp.place}」に合わせました`)
+    },
+    [data, route, headingRef],
   )
 
   if (error) {
@@ -88,14 +136,32 @@ export default function VisitorHome() {
           onChooseRoom={(roomId) => dispatch({ type: 'chooseDestination', roomId })}
         />
       )}
-      {screen === 'overview' && room && route && (
+      {askPermission && (
+        <PermissionScreen
+          onAllow={async () => {
+            setSensor(await requestOrientationPermission())
+            setAskPermission(false)
+            dispatch({ type: 'startGuide' })
+          }}
+          onSkip={() => {
+            setSensor('denied')
+            setAskPermission(false)
+            dispatch({ type: 'startGuide' })
+          }}
+        />
+      )}
+      {!askPermission && screen === 'overview' && room && route && (
         <OverviewScreen
           data={data}
           room={room}
           route={route}
           originLabel={origin.label}
           onBack={() => dispatch({ type: 'back' })}
-          onStart={() => dispatch({ type: 'startGuide' })}
+          onStart={() => {
+            // iPhone で、まだ動きセンサーの許可を聞いていなければ ⑦ を出す
+            if (sensor === 'unknown') setAskPermission(true)
+            else dispatch({ type: 'startGuide' })
+          }}
         />
       )}
       {screen === 'guide' && room && route && (
@@ -108,7 +174,31 @@ export default function VisitorHome() {
           onNext={() => dispatch({ type: 'next', lastStep: route.steps.length - 1 })}
           onPrev={() => dispatch({ type: 'prev' })}
           onOverview={() => dispatch({ type: 'back' })}
+          onCamera={() => setOverlay('camera')}
+          onScan={() => setOverlay('scan')}
         />
+      )}
+      {screen === 'guide' && route && overlay === 'camera' && (
+        <CameraOverlay
+          step={route.steps[Math.min(state.step, route.steps.length - 1)]}
+          targetBearing={stepBearing(route.steps[Math.min(state.step, route.steps.length - 1)])}
+          userHeading={anchor && heading !== null ? planHeading(heading, anchor.offset) : null}
+          confidence={confidence(
+            anchor ? { at: anchor.at, stepsSince: Math.max(0, state.step - anchor.step) } : null,
+            Date.now(),
+            sensor === 'granted' && working,
+          )}
+          isLast={state.step >= route.steps.length - 1}
+          onNext={() => dispatch({ type: 'next', lastStep: route.steps.length - 1 })}
+          onScan={() => setOverlay('scan')}
+          onClose={() => setOverlay('none')}
+        />
+      )}
+      {overlay === 'scan' && <ScanOverlay onFound={onScanned} onClose={() => setOverlay('none')} />}
+      {toast && (
+        <div className="v-toast" role="status">
+          {toast}
+        </div>
       )}
       {screen === 'arrived' && room && (
         <ArrivedScreen data={data} room={room} onBack={() => dispatch({ type: 'back' })} onFinish={() => dispatch({ type: 'reset' })} />
