@@ -1,14 +1,20 @@
-/* 全体の基本スタイル（見た目は画面の実装時に作り込む。設計書 D-5） */
+/* 全体の基本スタイル（来校者向け・管理コンソールで共通の色と形。設計書 D-5） */
 :root {
   --color-main: #1f6b3a; /* 校章の緑 */
-  --color-text: #1a1a1a;
-  --color-sub: #5c5c5c;
-  --color-bg: #ffffff;
-  --color-line: #d9d9d9;
-  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  --color-main-dark: #17522c;
+  --color-tint: #e8f3eb; /* 緑のうすい背景（選択中・お知らせ） */
+  --color-text: #1b1d1a;
+  --color-sub: #5a6058;
+  --color-bg: #f3f5f0; /* ページの地の色 */
+  --color-card: #ffffff;
+  --color-line: #d8dcd3;
+  --color-warn: #d9480f;
+  --shadow-card: 0 1px 2px rgba(27, 29, 26, 0.06), 0 2px 8px rgba(27, 29, 26, 0.05);
+  font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', 'BIZ UDPGothic', sans-serif;
   color: var(--color-text);
   background: var(--color-bg);
   line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
@@ -18,4 +24,22 @@
 body {
   margin: 0;
   min-height: 100dvh;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* キーボードで操作するときの枠（指で押したときは出さない） */
+:focus-visible {
+  outline: 3px solid #1c7ed6;
+  outline-offset: 2px;
+}
+
+.icon {
+  flex: none;
+  vertical-align: -0.2em;
 }

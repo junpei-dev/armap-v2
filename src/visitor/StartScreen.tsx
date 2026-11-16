@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import Icon from '../components/Icon.tsx'
 import { type CampusData, ROOM_CATEGORIES, ROOM_CATEGORY_LABELS, type Room } from '../types.ts'
 
 // ① スタート（要件 F-03・F-04・F-10〜F-12）
@@ -31,8 +32,8 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
 
   return (
     <main className="v-screen">
-      <header className="v-header">
-        <img src="/icon.png" alt="" width={40} height={40} />
+      <header className="v-hero">
+        <img src="/icon.png" alt="" width={44} height={44} />
         <div>
           <div className="v-school">宮崎県立延岡工業高等学校</div>
           <h1>校内案内</h1>
@@ -43,7 +44,7 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
         <div className="v-label">いまいる場所</div>
         <div className="v-origin-row">
           <span className="v-pin" aria-hidden>
-            ◎
+            <Icon name="pin" size={22} />
           </span>
           <strong>{originLabel}</strong>
           {data.checkpoints.length > 1 && (
@@ -76,14 +77,16 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
       </section>
 
       <h2 className="v-question">どこへ行きますか？</h2>
-      <input
-        className="v-search"
-        type="search"
-        placeholder="部屋の名前で探す（例: 職員室）"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        aria-label="部屋の名前で探す"
-      />
+      <label className="v-search">
+        <Icon name="search" size={20} />
+        <input
+          type="search"
+          placeholder="部屋の名前で探す（例: 職員室）"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="部屋の名前で探す"
+        />
+      </label>
 
       {grouped.length === 0 && <p className="v-note">「{query.trim()}」に合う場所が見つかりません。</p>}
       {grouped.map((g) => (
@@ -134,8 +137,8 @@ function RoomList({ rooms, placeOf, onChoose }: { rooms: Room[]; placeOf: (r: Ro
           <button type="button" onClick={() => onChoose(r.id)}>
             <span className="v-room-name">{r.name}</span>
             <span className="v-room-place">{placeOf(r)}</span>
-            <span className="v-chevron" aria-hidden>
-              ›
+            <span className="v-chevron">
+              <Icon name="chevron" size={18} />
             </span>
           </button>
         </li>

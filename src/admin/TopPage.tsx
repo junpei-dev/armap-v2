@@ -45,7 +45,7 @@ export default function TopPage() {
         <div>
           <b>{data.checkpoints.length}</b>チェックポイント
         </div>
-        <div>
+        <div className={openNotes > 0 ? 'alert' : undefined}>
           <b>{openNotes}</b>未対応の調査メモ
         </div>
       </div>
@@ -54,13 +54,13 @@ export default function TopPage() {
         <h2>
           検査の結果 <button type="button" className="link" onClick={reload}>読み込み直す</button>
         </h2>
-        {data.issues.length === 0 && <p>問題はありません。</p>}
+        {data.issues.length === 0 && <p className="ok-text">問題はありません。</p>}
         {fatal.length > 0 && (
           <>
-            <p className="issue-fatal">
+            <p className="issue-head issue-fatal">
               <b>直す必要がある問題（{fatal.length}件）</b>
             </p>
-            <ul>
+            <ul className="issues">
               {fatal.map((i, k) => (
                 <IssueItem key={k} issue={i} data={data} onShow={showNode} />
               ))}
@@ -69,11 +69,11 @@ export default function TopPage() {
         )}
         {warnings.length > 0 && (
           <>
-            <p>
+            <p className="issue-head">
               <b>注意（{warnings.length}件）</b>
               <span className="hint">　保存はできていますが、来校者の案内に影響するかもしれません</span>
             </p>
-            <ul>
+            <ul className="issues">
               {warnings.map((i, k) => (
                 <IssueItem key={k} issue={i} data={data} onShow={showNode} />
               ))}

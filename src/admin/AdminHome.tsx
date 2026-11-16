@@ -90,32 +90,44 @@ export default function AdminHome() {
   }, [notice])
 
   if (user === undefined) return <p className="admin-pad">確認中…</p>
+  const fatalCount = data?.issues.filter((i) => i.level === 'fatal').length ?? 0
+  const warnCount = data?.issues.filter((i) => i.level === 'warning').length ?? 0
+  const openNotes = data?.survey.filter((s) => !s.resolved).length ?? 0
   if (user === null) return <LoginForm onLogin={setUser} />
 
   return (
     <div className="admin">
       <header className="admin-header">
-        <strong>管理コンソール</strong>
+        <div className="admin-bar">
+          <img src="/icon.png" alt="" width={28} height={28} />
+          <strong>校内案内 管理</strong>
+          <span className="admin-user">
+            <span>{user.email.split('@')[0]}</span>
+            <a href="/" target="_blank" rel="noreferrer">
+              来校者の画面
+            </a>
+            <button
+              type="button"
+              onClick={async () => {
+                await logout()
+                setUser(null)
+              }}
+            >
+              ログアウト
+            </button>
+          </span>
+        </div>
         <nav className="admin-tabs">
           {TABS.map((t) => (
             <a key={t.id} href={`#${t.id}`} className={t.id === tab ? 'active' : ''}>
               {t.label}
+              {/* 直す所・未対応のメモがあるタブに、件数の印を付ける */}
+              {t.id === 'top' && fatalCount > 0 && <span className="badge fatal">{fatalCount}</span>}
+              {t.id === 'top' && fatalCount === 0 && warnCount > 0 && <span className="badge warn">{warnCount}</span>}
+              {t.id === 'survey' && openNotes > 0 && <span className="badge">{openNotes}</span>}
             </a>
           ))}
         </nav>
-        <span className="admin-user">
-          {user.email.split('@')[0]}
-          <button
-            type="button"
-            className="link"
-            onClick={async () => {
-              await logout()
-              setUser(null)
-            }}
-          >
-            ログアウト
-          </button>
-        </span>
       </header>
 
       {notice && (
@@ -181,9 +193,15 @@ function LoginForm({ onLogin }: { onLogin: (user: AdminUser) => void }) {
   }
 
   return (
-    <main className="admin-pad" style={{ maxWidth: 420, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 22 }}>管理コンソール</h1>
-      <form onSubmit={submit} className="form">
+    <main className="login">
+      <form onSubmit={submit} className="form login-card">
+        <header>
+          <img src="/icon.png" alt="" width={44} height={44} />
+          <div>
+            延岡工業高校 校内案内
+            <h1>管理コンソール</h1>
+          </div>
+        </header>
         <label>
           学校のメールアドレス
           <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />

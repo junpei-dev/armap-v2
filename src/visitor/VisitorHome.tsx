@@ -16,7 +16,6 @@ import CameraOverlay from './CameraOverlay.tsx'
 import GuideScreen from './GuideScreen.tsx'
 import OverviewScreen from './OverviewScreen.tsx'
 import PermissionScreen from './PermissionScreen.tsx'
-import ScanOverlay from './ScanOverlay.tsx'
 import StartScreen from './StartScreen.tsx'
 import { initialState, saveState, visitorReducer } from './state.ts'
 import './visitor.css'
@@ -30,10 +29,9 @@ export default function VisitorHome() {
   const [error, setError] = useState<string | null>(null)
   const [sensor, setSensor] = useState<SensorStatus>(savedSensorStatus)
   const [askPermission, setAskPermission] = useState(false) // ⑦ 許可のお願いを出しているか
-  const [overlay, setOverlay] = useState<'none' | 'camera' | 'scan'>('none')
+  const [camera, setCamera] = useState(false) // ④ カメラ案内を開いているか
   const [toast, setToast] = useState<string | null>(null)
   // QRで向きを合わせた記録（offset: 端末の角度→図面角度の差、step: そのときの区間、at: 時刻）
-  const closeOverlay = useCallback(() => setOverlay('none'), [])
   const [anchor, setAnchor] = useState<{ offset: number; step: number; at: number } | null>(null)
   const { heading, headingRef, working } = useDeviceHeading(state.screen === 'guide' && sensor === 'granted')
 
@@ -83,13 +81,16 @@ export default function VisitorHome() {
     [data, placed, origin, room],
   )
 
-  /** QRを読んだ（要件 F-30〜F-32）: 向きの基準を合わせ、その地点の区間へ。経路の外なら引き直す */
+  /**
+   * QRを読んだ（要件 F-30〜F-32）: 向きの基準を合わせ、その地点の区間へ。経路の外なら引き直す
+   * 移った先の区間の番号を返す（登録の無いQRなら null）
+   */
   const onScanned = useCallback(
-    (cpId: string) => {
+    (cpId: string): number | null => {
       const cp = data?.checkpoints.find((c) => c.id === cpId)
       if (!cp) {
         setToast('このQRコードは登録されていません')
-        return
+        return null
       }
       let step = 0
       if (route && stepForNode(route, cp.node) !== null) {
@@ -102,6 +103,7 @@ export default function VisitorHome() {
       if (h !== null) setAnchor({ offset: anchorOffset(cp.facing, h), step, at: Date.now() })
       const node = data?.nodes.find((n) => n.id === cp.node)
       setToast(`現在地を「${node?.landmark ?? cp.place}」に合わせました`)
+      return step
     },
     [data, route, headingRef],
   )
@@ -190,13 +192,14 @@ export default function VisitorHome() {
           onNext={() => dispatch({ type: 'next', lastStep: route.steps.length - 1 })}
           onPrev={() => dispatch({ type: 'prev' })}
           onOverview={() => dispatch({ type: 'back' })}
-          onCamera={() => setOverlay('camera')}
-          onScan={() => setOverlay('scan')}
+          onCamera={() => setCamera(true)}
         />
       )}
-      {screen === 'guide' && route && overlay === 'camera' && (
+      {screen === 'guide' && route && camera && (
         <CameraOverlay
           step={route.steps[Math.min(state.step, route.steps.length - 1)]}
+          stepIndex={Math.min(state.step, route.steps.length - 1)}
+          stepCount={route.steps.length}
           targetBearing={stepBearing(route.steps[Math.min(state.step, route.steps.length - 1)])}
           userHeading={anchor && heading !== null ? planHeading(heading, anchor.offset) : null}
           confidence={confidence(
@@ -205,12 +208,17 @@ export default function VisitorHome() {
             sensor === 'granted' && working,
           )}
           isLast={state.step >= route.steps.length - 1}
-          onNext={() => dispatch({ type: 'next', lastStep: route.steps.length - 1 })}
-          onScan={() => setOverlay('scan')}
-          onClose={() => setOverlay('none')}
+          onFound={onScanned}
+          arrowFor={arrowFor}
+          onNext={() => {
+            // 着いたら、カメラは閉じて到着の画面へ
+            if (state.step >= route.steps.length - 1) setCamera(false)
+            dispatch({ type: 'next', lastStep: route.steps.length - 1 })
+          }}
+          onPrev={() => dispatch({ type: 'prev' })}
+          onClose={() => setCamera(false)}
         />
       )}
-      {overlay === 'scan' && <ScanOverlay onFound={onScanned} onClose={closeOverlay} arrowFor={arrowFor} />}
       {toast && (
         <div className="v-toast" role="status">
           {toast}

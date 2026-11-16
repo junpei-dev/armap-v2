@@ -1,3 +1,4 @@
+import Icon from '../components/Icon.tsx'
 import type { CampusData, Room } from '../types.ts'
 
 // ⑥ 到着（要件 F-28）
@@ -8,8 +9,8 @@ export default function ArrivedScreen({ data, room, onBack, onFinish }: Props) {
   const building = data.buildings.find((b) => b.id === room.building)
   return (
     <main className="v-screen v-arrived">
-      <div className="v-arrived-mark" aria-hidden>
-        ✓
+      <div className="v-arrived-mark">
+        <Icon name="check" size={52} />
       </div>
       <h1>到着しました</h1>
       <p className="v-dest">{room.name}</p>

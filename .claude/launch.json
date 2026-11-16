@@ -1,0 +1,8 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "visitor-prod-data", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--mode", "proddata", "--port", "5174", "--strictPort"], "port": 5174 },
+    { "name": "web", "runtimeExecutable": "npx", "runtimeArgs": ["vite", "--port", "5173", "--strictPort"], "port": 5173 },
+    { "name": "api-local", "runtimeExecutable": "npx", "runtimeArgs": ["wrangler", "pages", "dev", "--port", "8788"], "port": 8788 }
+  ]
+}

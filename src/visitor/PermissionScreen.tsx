@@ -1,3 +1,5 @@
+import Icon from '../components/Icon.tsx'
+
 // ⑦ 許可のお願い（要件 F-05）
 // iPhone は、動きセンサーを使うたびにボタン操作での許可が必要。
 // 許可しなくても、地図と文字の案内で最後まで進める
@@ -7,6 +9,9 @@ type Props = { onAllow: () => void; onSkip: () => void }
 export default function PermissionScreen({ onAllow, onSkip }: Props) {
   return (
     <main className="v-screen v-permission">
+      <div className="v-permission-mark">
+        <Icon name="camera" size={40} />
+      </div>
       <h1>カメラと動きセンサーについて</h1>
       <p>
         案内の途中で、カメラの映像に<strong>進む方向の矢印</strong>を重ねて表示できます。そのために、スマートフォンの

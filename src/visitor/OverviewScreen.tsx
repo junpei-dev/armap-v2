@@ -1,4 +1,5 @@
 import CampusMap from '../components/CampusMap.tsx'
+import Icon from '../components/Icon.tsx'
 import RouteLayer from '../components/RouteLayer.tsx'
 import { minutesText, type Route, roundDistance, routeHighlights } from '../core/route.ts'
 import type { CampusData, Room } from '../types.ts'
@@ -22,26 +23,45 @@ export default function OverviewScreen({ data, room, route, originLabel, onBack,
 
   return (
     <main className="v-screen">
-      <button type="button" className="v-back" onClick={onBack}>
-        ‹ 目的地を選び直す
-      </button>
+      <div className="v-topbar">
+        <button type="button" className="v-back" onClick={onBack}>
+          <Icon name="back" size={18} />
+          目的地を選び直す
+        </button>
+      </div>
 
       <CampusMap buildings={data.buildings} highlight={[room.building]}>
         <RouteLayer route={route} animate />
       </CampusMap>
       <p className="v-legend">
-        <span className="v-pin">◎</span> いまいる場所（{originLabel}）　<span className="v-goal">●</span> 目的地　<span className="v-me">▶</span> 進む向き
-        {route.floorsClimbed > 0 && '　点線は2階以上'}
+        <span>
+          <b className="v-pin">◎</b> いまいる場所（{originLabel}）
+        </span>
+        <span>
+          <b className="v-goal">●</b> 目的地
+        </span>
+        <span>
+          <b className="v-me">▶</b> 進む向き
+        </span>
+        {route.floorsClimbed > 0 && <span>点線は2階以上</span>}
       </p>
 
       <section className="v-card">
+        <div className="v-label">目的地</div>
         <h1 className="v-dest">{room.name}</h1>
         <p className="v-dest-place">
           {building?.name ?? `${room.building}棟`}・<strong>{room.floor}階</strong>
         </p>
         <p className="v-dest-meta">
-          約{Math.max(5, roundDistance(route.distance))}m・徒歩{minutesText(route.seconds)}
-          {route.floorsClimbed > 0 && `・階段あり`}
+          <span className="v-pill">
+            <Icon name="walk" size={16} />約{Math.max(5, roundDistance(route.distance))}m・徒歩{minutesText(route.seconds)}
+          </span>
+          {route.floorsClimbed > 0 && (
+            <span className="v-pill v-pill-stairs">
+              <Icon name="stairs" size={16} />
+              階段あり
+            </span>
+          )}
         </p>
         {highlights.length > 0 && (
           <ul className="v-highlights">
