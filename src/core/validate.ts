@@ -1,6 +1,15 @@
 import type { CampusRaw, Issue } from '../types.ts'
-import { nodePosition, placementOf, reachableFrom, START_CHECKPOINT_ID, startNodeId } from './campus.ts'
-import { pointInPolygon } from './geometry.ts'
+import {
+  buildingAt,
+  ENTRANCE_TOLERANCE_M,
+  isBridge,
+  nearPolygon,
+  nodePosition,
+  placementOf,
+  reachableFrom,
+  START_CHECKPOINT_ID,
+  startNodeId,
+} from './campus.ts'
 
 // データの検査（設計書 5.5）
 // サーバー（保存のとき）と管理コンソール（画面の表示）の両方で、この1つの関数を使う。
@@ -50,15 +59,18 @@ export function validate(raw: CampusRaw): Issue[] {
     if (n.local && !n.building) fatal(t, 'u・v で位置を入れるときは棟を選んでください')
     if (n.local && b && !placementOf(b)) fatal(t, `棟 ${b.id} は平面図の置き方（基準点・向き）が未設定なので、u・v は使えません`)
     if (!connected.has(n.id)) warn(t, 'どの辺ともつながっていません')
-    // 棟の出入口は外形の線の上や少し外に置くので、屋外にあってもよい。外階段も屋外にあってよい
-    if (!n.building && n.kind !== 'outdoor' && n.kind !== 'entrance' && n.kind !== 'stairs') {
-      warn(t, '屋外のノードですが、種類が「屋外」ではありません')
-    }
-
-    // 屋内ノードが棟の外にないか
     const pos = nodePosition(n, buildings)
-    if (b && pos && b.outline.length >= 3 && !pointInPolygon(pos, b.outline)) {
-      warn(t, `棟 ${b.id} の外形の外にあります`)
+    // 屋外のノードなのに、棟の中にある（屋外で置いてから棟の中へ動かした、など）
+    if (!n.building && pos && n.kind !== 'entrance' && n.kind !== 'door') {
+      const inside = buildingAt(pos, raw.buildings, n.floor)
+      if (inside && !isBridge(inside)) {
+        warn(t, `棟 ${inside.id}（${inside.name}）の中にありますが、屋外のノードになっています。トップの「位置から棟を直す」で直せます`)
+      }
+    }
+    // 屋内ノードが棟の外にないか（出入口・部屋の入口は壁の近くに置くので、外形から少し外れていてもよい）
+    const tolerance = n.kind === 'entrance' || n.kind === 'door' ? ENTRANCE_TOLERANCE_M : 0.05
+    if (b && pos && b.outline.length >= 3 && !nearPolygon(pos, b.outline, tolerance)) {
+      warn(t, `棟 ${b.id} の外形の外にあります。トップの「位置から棟を直す」で直せます`)
     }
   }
 
@@ -78,7 +90,7 @@ export function validate(raw: CampusRaw): Issue[] {
       if (a.floor !== c.floor && e.kind !== 'stairs') warn(t, '階の違うノード同士なのに、種類が「階段」ではありません')
       if (e.kind === 'stairs') {
         if (Math.abs(a.floor - c.floor) !== 1) warn(t, '階段の両端は、階が1つ違うノードにしてください')
-        if (a.building !== c.building) warn(t, '階段の両端が別の棟になっています')
+        if (a.building && c.building && a.building !== c.building) warn(t, '階段の両端が別の棟になっています')
         // 同じ階段なら、上の階と下の階でほぼ同じ位置にあるはず
         const pa = nodePosition(a, buildings)
         const pc = nodePosition(c, buildings)

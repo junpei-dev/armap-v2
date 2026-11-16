@@ -1,9 +1,28 @@
+import { useMemo, useState } from 'react'
+import { buildingMismatches, inputFromTap } from '../core/campus.ts'
+import type { GraphNode } from '../types.ts'
 import { useAdmin } from './AdminContext.tsx'
 import IssueItem from './IssueItem.tsx'
 
 // 管理トップ：データの件数と、検査で見つかった問題の一覧（設計書 7.4）
 export default function TopPage() {
-  const { data, reload, showNode } = useAdmin()
+  const { data, reload, showNode, saveAndReload, notify } = useAdmin()
+  const mismatches = useMemo(() => buildingMismatches(data), [data])
+  const [fixing, setFixing] = useState(false)
+
+  /** 位置と棟の設定が合っていないノードを、位置に合わせてまとめて直す */
+  async function fixBuildings() {
+    if (!confirm(`${mismatches.length}個のノードの棟の設定を、置いてある位置に合わせて直しますか？（変更履歴から元に戻せます）`)) return
+    setFixing(true)
+    let ok = 0
+    for (const m of mismatches) {
+      const value: GraphNode = { ...m.node, building: m.suggested?.id, local: undefined, pos: undefined, ...inputFromTap(m.pos, m.suggested) }
+      const r = await saveAndReload('nodes', 'update', value, `ノード ${m.node.id} の棟を直しました`)
+      if (r.ok) ok++
+    }
+    setFixing(false)
+    notify(`${ok}個のノードの棟を直しました`)
+  }
   const fatal = data.issues.filter((i) => i.level === 'fatal')
   const warnings = data.issues.filter((i) => i.level === 'warning')
   const openNotes = data.survey.filter((s) => !s.resolved).length
@@ -62,6 +81,30 @@ export default function TopPage() {
           </>
         )}
       </section>
+
+      {mismatches.length > 0 && (
+        <section className="panel">
+          <h2>位置と棟が合っていないノード（{mismatches.length}個）</h2>
+          <p className="hint">
+            屋外で置いてから棟の中へ動かした、などで、置いてある位置と「棟」の設定が食い違っています。
+            ボタンを押すと、位置に合わせて棟の設定を直します（位置は動きません）。
+          </p>
+          <ul>
+            {mismatches.map((m) => (
+              <li key={m.node.id}>
+                {m.node.id}（{m.node.landmark ?? '目印なし'}・{m.node.floor}階）: {m.node.building ? `棟 ${m.node.building}` : '屋外'} →{' '}
+                <b>{m.suggested ? `棟 ${m.suggested.id}（${m.suggested.name}）` : '屋外'}</b>
+                <button type="button" className="issue-jump" onClick={() => showNode(m.node.id)}>
+                  地図で見る
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="primary" disabled={fixing} onClick={fixBuildings}>
+            {fixing ? '直しています…' : '位置から棟を直す'}
+          </button>
+        </section>
+      )}
 
       <section className="panel">
         <h2>使い方</h2>

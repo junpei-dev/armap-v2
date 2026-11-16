@@ -111,14 +111,28 @@ describe('validate', () => {
     expect(validate(raw).some((i) => i.target === 'ノード B1-1F-C09' && i.message.includes('外形の外'))).toBe(true)
   })
 
-  it('屋外に置いた出入口には注意を出さない（廊下の種類なら出す）', () => {
+  it('棟の中にあるのに屋外になっているノードを知らせる（棟の外の屋外ノード・出入口は知らせない）', () => {
     const raw = sample()
-    raw.nodes.push({ id: 'OUT-1', floor: 1, kind: 'entrance', pos: { x: 99, y: 80 } })
-    raw.nodes.push({ id: 'OUT-2', floor: 1, kind: 'corridor', pos: { x: 98, y: 80 } })
+    raw.nodes.push({ id: 'OUT-1', floor: 1, kind: 'entrance', pos: { x: 99, y: 80 } }) // ①の壁のすぐ外の出入口
+    raw.nodes.push({ id: 'OUT-2', floor: 1, kind: 'corridor', pos: { x: 90, y: 80 } }) // 屋外の通路
+    raw.nodes.push({ id: 'OUT-3', floor: 1, kind: 'stairs', pos: { x: 105, y: 80 } }) // ①の中なのに屋外
     raw.edges.push({ from: 'OUT-1', to: 'B1-1F-D-jimu', kind: 'walk', oneway: false, closed: false })
     raw.edges.push({ from: 'OUT-2', to: 'OUT-1', kind: 'walk', oneway: false, closed: false })
-    const kinds = validate(raw).filter((i) => i.message.includes('種類が「屋外」ではありません')).map((i) => i.target)
-    expect(kinds).toEqual(['ノード OUT-2'])
+    raw.edges.push({ from: 'OUT-3', to: 'OUT-1', kind: 'walk', oneway: false, closed: false })
+    const targets = validate(raw).filter((i) => i.target.includes('OUT-')).map((i) => `${i.target} ${i.message}`)
+    expect(targets).toHaveLength(1)
+    expect(targets[0]).toContain('ノード OUT-3')
+    expect(targets[0]).toContain('の中にありますが、屋外のノードになっています')
+  })
+
+  it('出入口は棟の外形から4mまで外れていてもよい（ほかの種類は外れていたら注意）', () => {
+    const raw = sample()
+    raw.nodes.push({ id: 'B1-1F-E01', building: '1', floor: 1, kind: 'entrance', pos: { x: 99, y: 80 } })
+    raw.nodes.push({ id: 'B1-1F-C09', building: '1', floor: 1, kind: 'corridor', pos: { x: 99, y: 82 } })
+    raw.edges.push({ from: 'B1-1F-E01', to: 'B1-1F-D-jimu', kind: 'walk', oneway: false, closed: false })
+    raw.edges.push({ from: 'B1-1F-C09', to: 'B1-1F-D-jimu', kind: 'walk', oneway: false, closed: false })
+    const outside = validate(raw).filter((i) => i.message.includes('外形の外')).map((i) => i.target)
+    expect(outside).toEqual(['ノード B1-1F-C09'])
   })
 
   it('階段の上下で位置が3m以上ずれていれば注意', () => {
@@ -203,5 +217,27 @@ describe('issueNodeIds（問題からノードを探す）', () => {
     expect(issueNodeIds({ target: 'チェックポイント CP01' }, raw)).toEqual(['B1-1F-D-jimu'])
     expect(issueNodeIds({ target: '辺 B1-1F-S1 → NOPE' }, raw)).toEqual(['B1-1F-S1'])
     expect(issueNodeIds({ target: '棟 1' }, raw)).toEqual([])
+  })
+})
+
+describe('buildingAt（位置から棟を決める）', () => {
+  const bridge = { id: '52', name: '渡り廊下（2階）', drawingName: '渡り廊下', floors: 2, outline: [ { x: 90, y: 60 }, { x: 105, y: 60 }, { x: 105, y: 64 }, { x: 90, y: 64 } ] }
+  it('渡り廊下と重なる所では、普通の棟を選ぶ', async () => {
+    const { buildingAt } = await import('../src/core/campus.ts')
+    expect(buildingAt({ x: 102, y: 62 }, [bridge, kanri], 1)?.id).toBe('1')
+    expect(buildingAt({ x: 95, y: 62 }, [bridge, kanri], 1)).toBeUndefined() // 1階の渡り廊下の下は屋外
+    expect(buildingAt({ x: 95, y: 62 }, [bridge, kanri], 2)?.id).toBe('52') // 渡り廊下だけの所
+    expect(buildingAt({ x: 50, y: 50 }, [bridge, kanri], 1)).toBeUndefined()
+  })
+  it('その階がない棟は選ばない', async () => {
+    const { buildingAt } = await import('../src/core/campus.ts')
+    expect(buildingAt({ x: 95, y: 62 }, [bridge], 3)).toBeUndefined()
+  })
+  it('buildingMismatches は、位置と棟が食い違うノードを見つける', async () => {
+    const { buildingMismatches } = await import('../src/core/campus.ts')
+    const raw = sample()
+    raw.nodes.push({ id: 'OUT-3', floor: 1, kind: 'stairs', pos: { x: 105, y: 80 } })
+    const m = buildingMismatches(raw)
+    expect(m.map((x) => [x.node.id, x.suggested?.id])).toEqual([['OUT-3', '1']])
   })
 })

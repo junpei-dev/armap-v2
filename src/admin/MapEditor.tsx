@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import CampusMap, { NO_PAN_CLASS, useMapPoint, useMapScale, useUpright } from '../components/CampusMap.tsx'
-import { inputFromTap, nodePosition, placeNodes, round2, suggestNodeId } from '../core/campus.ts'
+import { buildingAt, buildingForNode, inputFromTap, nodePosition, placeNodes, round2, suggestNodeId } from '../core/campus.ts'
 import { distance, distanceToSegment, pointInPolygon } from '../core/geometry.ts'
 import {
   type Building,
@@ -130,22 +130,30 @@ export default function MapEditor() {
   async function dropNode(id: string, p: Point) {
     const node = data.nodes.find((n) => n.id === id)
     if (!node) return
+    // 離した位置で棟を決め直す（屋外から棟の中へ、棟から屋外へ動かしたとき）
+    const b = buildingForNode(node, p, data.buildings)
     const value: GraphNode = {
       id: node.id,
-      building: node.building,
+      building: b?.id,
       floor: node.floor,
       kind: node.kind,
       landmark: node.landmark,
-      ...inputFromTap(p, node.building ? buildings.get(node.building) : undefined),
+      ...inputFromTap(p, b),
     }
-    await saveAndReload('nodes', 'update', value, `ノード ${id} を動かしました`)
+    const moved = (b?.id ?? '') !== (node.building ?? '')
+    await saveAndReload(
+      'nodes',
+      'update',
+      value,
+      moved ? `ノード ${id} を動かし、${b ? `棟 ${b.id}（${b.name}）` : '屋外'}のノードにしました` : `ノード ${id} を動かしました`,
+    )
     setDrag(null)
   }
 
   async function onTap(p: Point) {
     if (mode === 'add') {
-      const b = data.buildings.find((x) => pointInPolygon(p, x.outline))
-      // 棟の中ならその棟の階数まで。屋外（外階段・2階の通路など）は、今選んでいる階で置く
+      // 位置と今の階から棟を決める（渡り廊下より普通の棟を優先）。屋外（外階段・2階の通路など）は今の階で置く
+      const b = buildingAt(p, data.buildings, floor) ?? data.buildings.find((x) => !x.name.includes('渡り廊下') && pointInPolygon(p, x.outline))
       const f = b ? Math.min(floor, b.floors) : floor
       const kind: NodeKind = b ? 'corridor' : 'outdoor'
       const ids = new Set(data.nodes.map((n) => n.id))
@@ -563,6 +571,16 @@ function NodeForm({ node, isNew = false, onDone }: { node: GraphNode; isNew?: bo
 
   const num = (s: string) => (s === '' ? NaN : Number(s))
 
+  /** 棟を選び直す。位置はそのままで、u・v（棟の中）か x・y（屋外）に置きかえる */
+  function changeBuilding(id: string) {
+    const all = new Map(data.buildings.map((b) => [b.id, b]))
+    const pos = nodePosition(v, all)
+    const nb = id ? all.get(id) : undefined
+    const next: GraphNode = { ...v, building: nb?.id, local: undefined, pos: undefined, ...(pos ? inputFromTap(pos, nb) : {}) }
+    if (nb && next.floor > nb.floors) next.floor = nb.floors
+    setV(next)
+  }
+
   return (
     <section className="panel">
       <h2>{isNew ? '新しいノード' : `ノード ${node.id}`}</h2>
@@ -589,9 +607,17 @@ function NodeForm({ node, isNew = false, onDone }: { node: GraphNode; isNew?: bo
             ))}
           </select>
         </label>
-        <p className="hint">
-          場所: {building ? `${building.name}（${building.id}）` : '屋外'}
-        </p>
+        <label>
+          棟（ふつうは置いた位置で自動で決まります）
+          <select value={v.building ?? ''} onChange={(e) => changeBuilding(e.target.value)}>
+            <option value="">屋外</option>
+            {data.buildings.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.id} {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
         {(!building || building.floors > 1) && (
           <label>
             階{!building && '（外階段・2階の通路などは、その階を選ぶ）'}
