@@ -18,6 +18,15 @@ import { NoteMark } from './SurveyNotes.tsx'
 // 地図エディタ（要件 F-52・F-53、設計書 7.4）
 // モード: 選択 / ノード追加 / 辺（2つのノードをつなぐ） / 削除
 
+/** ノードの種類ごとの色と大きさ（2026-11-16 色分け。種類が一目で分かるように） */
+export const KIND_STYLE: Record<NodeKind, { color: string; r: number; mark?: string }> = {
+  corridor: { color: '#5c7f67', r: 4.5 }, // 廊下: 灰緑・小さめ
+  door: { color: '#1c7ed6', r: 5.5 }, // 部屋の入口: 青
+  entrance: { color: '#e8590c', r: 6 }, // 棟の出入口: 橙
+  stairs: { color: '#7048e8', r: 7.5, mark: '階' }, // 階段: 紫・大きく「階」
+  outdoor: { color: '#8d6e3f', r: 5 }, // 屋外: 茶
+}
+
 type Mode = 'select' | 'add' | 'edge' | 'delete'
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: 'select', label: '選択', hint: 'ノードはドラッグで動かせます（隣のノードと縦・横がそろう位置に吸い付きます）。タップすると右の欄で直せます' },
@@ -48,19 +57,24 @@ export default function MapEditor() {
   const maxFloor = Math.max(1, ...data.buildings.map((b) => b.floors))
   const onFloor = (n: GraphNode) => n.floor === floor
 
-  /** タップした位置に一番近いノード（12ピクセル以内） */
+  /**
+   * タップした位置に一番近いノード（12ピクセル以内）
+   * 階段のように上下の階で同じ位置に重なっているときは、今選んでいる階のノードを優先する
+   */
   function nodeAt(p: Point, anyFloor: boolean): PlacedNode | undefined {
-    let best: PlacedNode | undefined
-    let bestD = 12 * scale
-    for (const n of placed) {
-      if (!anyFloor && !onFloor(n)) continue
-      const d = distance(p, n.pos)
-      if (d < bestD) {
-        best = n
-        bestD = d
+    const pick = (list: PlacedNode[]) => {
+      let best: PlacedNode | undefined
+      let bestD = 12 * scale
+      for (const n of list) {
+        const d = distance(p, n.pos)
+        if (d < bestD) {
+          best = n
+          bestD = d
+        }
       }
+      return best
     }
-    return best
+    return pick(placed.filter(onFloor)) ?? (anyFloor ? pick(placed) : undefined)
   }
 
   /** タップした位置に一番近い辺（8ピクセル以内） */
@@ -114,7 +128,8 @@ export default function MapEditor() {
   async function onTap(p: Point) {
     if (mode === 'add') {
       const b = data.buildings.find((x) => pointInPolygon(p, x.outline))
-      const f = b ? Math.min(floor, b.floors) : 1
+      // 棟の中ならその棟の階数まで。屋外（外階段・2階の通路など）は、今選んでいる階で置く
+      const f = b ? Math.min(floor, b.floors) : floor
       const kind: NodeKind = b ? 'corridor' : 'outdoor'
       const ids = new Set(data.nodes.map((n) => n.id))
       setSelectedId(null)
@@ -213,7 +228,7 @@ export default function MapEditor() {
             <select value={floor} onChange={(e) => setFloor(Number(e.target.value))}>
               {Array.from({ length: maxFloor }, (_, i) => (
                 <option key={i + 1} value={i + 1}>
-                  {i + 1}階{i === 0 ? '・屋外' : ''}
+                  {i + 1}階
                 </option>
               ))}
             </select>
@@ -242,6 +257,7 @@ export default function MapEditor() {
             </>
           )}
         </p>
+        <KindLegend />
         <CampusMap buildings={data.buildings} focus={focus || undefined} zoomTo={focus} onTap={onTap} height="min(70vh, 640px)">
           <ScaleProbe onScale={setScale} />
           <EdgesLayer edges={data.edges} placedById={placedById} floor={floor} />
@@ -291,7 +307,7 @@ export default function MapEditor() {
               {placed.filter(onFloor).length}個（{floor}階{floor === 1 ? '・屋外' : ''}）。地図のノードをタップするか、「ノード追加」で新しく置いてください。
             </p>
             <p className="hint">
-              ● 濃い緑: この階のノード ／ ● 薄い色: ほかの階 ／ ◎ 二重丸: 事務室（CP01） ／ ▲: 未対応の調査メモ ／ 点線: 階段
+              色はノードの種類（地図の上の凡例）。薄い色: ほかの階 ／ ◎ 二重丸: 事務室（CP01） ／ ▲: 未対応の調査メモ ／ 点線: 階段
             </p>
           </section>
         )}
@@ -410,18 +426,29 @@ function NodesLayer({
               }}
               cx={n.pos.x}
               cy={n.pos.y}
-              r={(isSel ? 6.5 : 5) * px}
-              fill={isSel ? 'var(--selected)' : here ? 'var(--node)' : 'var(--node-faint)'}
-              stroke="#fff"
-              strokeWidth={1.2 * px}
+              r={(KIND_STYLE[n.kind].r + (isSel ? 1.5 : 0)) * px}
+              fill={KIND_STYLE[n.kind].color}
+              opacity={here ? 1 : 0.3}
+              stroke={isSel ? 'var(--selected)' : '#fff'}
+              strokeWidth={(isSel ? 3 : 1.2) * px}
             >
               <title>
                 {n.id} {n.landmark ?? ''}
               </title>
             </circle>
-            {n.kind === 'stairs' && here && (
-              <text x={n.pos.x} y={n.pos.y} transform={upright(n.pos)} fontSize={7 * px} fill="#fff" textAnchor="middle" dominantBaseline="central" style={{ pointerEvents: 'none' }}>
-                S
+            {KIND_STYLE[n.kind].mark && here && (
+              <text
+                x={n.pos.x}
+                y={n.pos.y}
+                transform={upright(n.pos)}
+                fontSize={9 * px}
+                fontWeight="bold"
+                fill="#fff"
+                textAnchor="middle"
+                dominantBaseline="central"
+                style={{ pointerEvents: 'none', userSelect: 'none' }}
+              >
+                {KIND_STYLE[n.kind].mark}
               </text>
             )}
           </g>
@@ -498,11 +525,11 @@ function NodeForm({ node, isNew = false, onDone }: { node: GraphNode; isNew?: bo
         <p className="hint">
           場所: {building ? `${building.name}（${building.id}）` : '屋外'}
         </p>
-        {building && building.floors > 1 && (
+        {(!building || building.floors > 1) && (
           <label>
-            階
+            階{!building && '（外階段・2階の通路などは、その階を選ぶ）'}
             <select value={v.floor} onChange={(e) => update({ floor: Number(e.target.value) })}>
-              {Array.from({ length: building.floors }, (_, i) => (
+              {Array.from({ length: building?.floors ?? maxFloorOf(data.buildings) }, (_, i) => (
                 <option key={i + 1} value={i + 1}>
                   {i + 1}階
                 </option>
@@ -562,6 +589,7 @@ function NodeForm({ node, isNew = false, onDone }: { node: GraphNode; isNew?: bo
 function LinkedEdges({ nodeId, onDeleteNode }: { nodeId: string; onDeleteNode: () => void }) {
   const { data, saveAndReload } = useAdmin()
   const linked = data.edges.filter((e) => e.from === nodeId || e.to === nodeId)
+  const floorOf = (id: string) => data.nodes.find((n) => n.id === id)?.floor
   return (
     <section className="panel">
       <h2>つながっている辺（{linked.length}本）</h2>
@@ -585,6 +613,15 @@ function LinkedEdges({ nodeId, onDeleteNode }: { nodeId: string; onDeleteNode: (
                 >
                   {e.closed ? '通れるようにする' : '通行止めにする'}
                 </button>
+                {e.kind !== 'stairs' && floorOf(e.from) !== floorOf(e.to) && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => saveAndReload('edges', 'update', { ...e, kind: 'stairs' }, '階段にしました')}
+                  >
+                    階段にする
+                  </button>
+                )}
                 {e.kind !== 'stairs' && (
                   <button
                     type="button"
@@ -610,5 +647,28 @@ function LinkedEdges({ nodeId, onDeleteNode }: { nodeId: string; onDeleteNode: (
         </button>
       </div>
     </section>
+  )
+}
+
+/** 校地でいちばん高い棟の階数（屋外のノードで選べる階の上限） */
+function maxFloorOf(buildings: Building[]): number {
+  return Math.max(1, ...buildings.map((b) => b.floors))
+}
+
+/** 種類ごとの色の凡例 */
+export function KindLegend() {
+  return (
+    <div className="legend">
+      {NODE_KINDS.map((k) => (
+        <span key={k}>
+          <i style={{ background: KIND_STYLE[k].color }}>{KIND_STYLE[k].mark ?? ''}</i>
+          {NODE_KIND_LABELS[k].label}
+        </span>
+      ))}
+      <span>
+        <i style={{ background: '#fff', border: '3px solid var(--selected)' }} />
+        選んでいるノード
+      </span>
+    </div>
   )
 }

@@ -138,6 +138,16 @@ describe('validate', () => {
     expect(msgs.some((m) => m.includes('同じ目印「会議室」の部屋の入口が2つ'))).toBe(true)
   })
 
+  it('屋外の外階段（1階と2階）は、階段の辺でつなげて注意も出ない', () => {
+    const raw = sample()
+    raw.nodes.push({ id: 'OUT-1', floor: 1, kind: 'stairs', pos: { x: 120, y: 90 }, landmark: '外階段' })
+    raw.nodes.push({ id: 'OUT-2', floor: 2, kind: 'stairs', pos: { x: 120, y: 90 }, landmark: '外階段' })
+    raw.edges.push({ from: 'OUT-1', to: 'B1-1F-D-jimu', kind: 'walk', oneway: false, closed: false })
+    raw.edges.push({ from: 'OUT-1', to: 'OUT-2', kind: 'stairs', oneway: false, closed: false })
+    raw.edges.push({ from: 'OUT-2', to: 'B1-2F-S1', kind: 'walk', oneway: false, closed: false })
+    expect(validate(raw).filter((i) => i.target.includes('OUT-'))).toEqual([])
+  })
+
   it('newFatalIssues は、もともとあった致命的な問題を除く', () => {
     const before = [{ level: 'fatal' as const, target: 'A', message: 'x' }]
     const after = [...before, { level: 'fatal' as const, target: 'B', message: 'y' }]

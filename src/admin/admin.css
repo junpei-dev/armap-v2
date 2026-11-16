@@ -327,3 +327,28 @@ table.data tr {
   height: auto;
   image-rendering: pixelated;
 }
+
+/* ノードの種類ごとの色の凡例 */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend i {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: bold;
+}
