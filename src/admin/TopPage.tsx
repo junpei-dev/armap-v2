@@ -1,8 +1,9 @@
 import { useAdmin } from './AdminContext.tsx'
+import IssueItem from './IssueItem.tsx'
 
 // 管理トップ：データの件数と、検査で見つかった問題の一覧（設計書 7.4）
 export default function TopPage() {
-  const { data, reload } = useAdmin()
+  const { data, reload, showNode } = useAdmin()
   const fatal = data.issues.filter((i) => i.level === 'fatal')
   const warnings = data.issues.filter((i) => i.level === 'warning')
   const openNotes = data.survey.filter((s) => !s.resolved).length
@@ -42,9 +43,7 @@ export default function TopPage() {
             </p>
             <ul>
               {fatal.map((i, k) => (
-                <li key={k} className="issue-fatal">
-                  {i.target}: {i.message}
-                </li>
+                <IssueItem key={k} issue={i} data={data} onShow={showNode} />
               ))}
             </ul>
           </>
@@ -57,9 +56,7 @@ export default function TopPage() {
             </p>
             <ul>
               {warnings.map((i, k) => (
-                <li key={k}>
-                  {i.target}: {i.message}
-                </li>
+                <IssueItem key={k} issue={i} data={data} onShow={showNode} />
               ))}
             </ul>
           </>

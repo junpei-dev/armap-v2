@@ -36,7 +36,7 @@ const MODES: { id: Mode; label: string; hint: string }[] = [
 ]
 
 export default function MapEditor() {
-  const { data, saveAndReload } = useAdmin()
+  const { data, saveAndReload, focusRequest } = useAdmin()
   const [mode, setMode] = useState<Mode>('select')
   const [floor, setFloor] = useState(1)
   const [focus, setFocus] = useState('')
@@ -45,6 +45,23 @@ export default function MapEditor() {
   const [edgeFrom, setEdgeFrom] = useState<string | null>(null)
   const [scale, setScale] = useState(1) // 画面1ピクセルが何mか（タップの判定に使う）
   const [drag, setDrag] = useState<{ id: string; pos: Point } | null>(null) // ドラッグ中のノードと位置
+  // 問題の一覧の「地図で見る」で飛んできたノード（地図をそこへ拡大し、吹き出しを出す）
+  const [focusNode, setFocusNode] = useState<{ id: string; seq: number } | null>(null)
+
+  // 「地図で見る」の依頼が来たら、そのノードの階に切り替えて選び、地図を寄せる
+  // （データが読み込み直されても同じ依頼で何度も飛ばないよう、依頼が変わったときだけ動く）
+  useEffect(() => {
+    if (!focusRequest) return
+    const n = data.nodes.find((x) => x.id === focusRequest.id)
+    if (!n) return
+    setMode('select')
+    setDraft(null)
+    setEdgeFrom(null)
+    setFocus('')
+    setFloor(n.floor)
+    setSelectedId(n.id)
+    setFocusNode(focusRequest)
+  }, [focusRequest]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const buildings = useMemo(() => new Map(data.buildings.map((b) => [b.id, b])), [data.buildings])
   const savedPlaced = useMemo(() => placeNodes(data), [data])
@@ -235,7 +252,13 @@ export default function MapEditor() {
           </label>
           <label>
             担当の棟（選ぶと拡大）{' '}
-            <select value={focus} onChange={(e) => setFocus(e.target.value)}>
+            <select
+              value={focus}
+              onChange={(e) => {
+                setFocusNode(null)
+                setFocus(e.target.value)
+              }}
+            >
               <option value="">（なし）</option>
               {data.buildings.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -258,7 +281,15 @@ export default function MapEditor() {
           )}
         </p>
         <KindLegend />
-        <CampusMap buildings={data.buildings} focus={focus || undefined} zoomTo={focus} onTap={onTap} height="min(70vh, 640px)">
+        <CampusMap
+          buildings={data.buildings}
+          focus={focus || undefined}
+          zoomTo={focus}
+          zoomToId={focusNode ? 'editor-focus' : undefined}
+          zoomKey={focusNode?.seq}
+          onTap={onTap}
+          height="min(70vh, 640px)"
+        >
           <ScaleProbe onScale={setScale} />
           <EdgesLayer edges={data.edges} placedById={placedById} floor={floor} />
           {data.survey.filter((s) => !s.resolved && s.floor === floor).map((s) => (
@@ -279,6 +310,9 @@ export default function MapEditor() {
             onCancel={() => setDrag(null)}
           />
           {draft && <DraftNode node={draft} building={draft.building ? buildings.get(draft.building) : undefined} />}
+          {focusNode && placedById.get(focusNode.id) && (
+            <FocusCallout node={placedById.get(focusNode.id)!} show={selectedId === focusNode.id} />
+          )}
         </CampusMap>
       </div>
 
@@ -328,6 +362,10 @@ function ScaleProbe({ onScale }: { onScale: (v: number) => void }) {
 
 function EdgesLayer({ edges, placedById, floor }: { edges: Edge[]; placedById: Map<string, PlacedNode>; floor: number }) {
   const px = useMapScale()
+  const upright = useUpright()
+  // 階段の辺は、上下の階で同じ位置に置くので線がとても短い。点線が見えなくても分かるよう、
+  // 紫の太い点線にして、真ん中に「1⇕2」のような階の印を付ける（2026-11-16）
+  const stairs = KIND_STYLE.stairs.color
   return (
     <g>
       {edges.map((e) => {
@@ -335,18 +373,38 @@ function EdgesLayer({ edges, placedById, floor }: { edges: Edge[]; placedById: M
         const b = placedById.get(e.to)
         if (!a || !b) return null
         const active = a.floor === floor || b.floor === floor
+        const isStairs = e.kind === 'stairs'
+        const mid = { x: (a.pos.x + b.pos.x) / 2, y: (a.pos.y + b.pos.y) / 2 }
+        const [lo, hi] = [Math.min(a.floor, b.floor), Math.max(a.floor, b.floor)]
         return (
-          <line
-            key={e.id}
-            x1={a.pos.x}
-            y1={a.pos.y}
-            x2={b.pos.x}
-            y2={b.pos.y}
-            stroke={e.closed ? 'var(--error)' : active ? 'var(--edge)' : 'var(--node-faint)'}
-            strokeWidth={(active ? 2.5 : 1.5) * px}
-            strokeDasharray={e.kind === 'stairs' ? `${4 * px} ${3 * px}` : undefined}
-            opacity={active ? 0.9 : 0.5}
-          />
+          <g key={e.id}>
+            <line
+              x1={a.pos.x}
+              y1={a.pos.y}
+              x2={b.pos.x}
+              y2={b.pos.y}
+              stroke={e.closed ? 'var(--error)' : isStairs ? stairs : active ? 'var(--edge)' : 'var(--node-faint)'}
+              strokeWidth={(isStairs ? 4 : active ? 2.5 : 1.5) * px}
+              strokeDasharray={isStairs ? `${3 * px} ${2.5 * px}` : undefined}
+              opacity={active ? 0.9 : 0.4}
+            />
+            {isStairs && active && (
+              <g transform={upright(mid)} style={{ pointerEvents: 'none' }}>
+                <rect x={mid.x + 6 * px} y={mid.y - 7 * px} width={26 * px} height={14 * px} rx={7 * px} fill={stairs} />
+                <text
+                  x={mid.x + 19 * px}
+                  y={mid.y}
+                  fontSize={9 * px}
+                  fontWeight="bold"
+                  fill="#fff"
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                >
+                  {lo}⇕{hi}
+                </text>
+              </g>
+            )}
+          </g>
         )
       })}
     </g>
@@ -490,6 +548,15 @@ function NodeForm({ node, isNew = false, onDone }: { node: GraphNode; isNew?: bo
   async function submit() {
     setSaving(true)
     const r = await saveAndReload('nodes', isNew ? 'insert' : 'update', v, isNew ? `ノード ${v.id} を追加しました` : `ノード ${v.id} を保存しました`)
+    if (r.ok && !isNew && v.floor !== node.floor) {
+      // 階を変えたら、つながっている辺のうち階が食い違うものを自動で「階段」にする（外階段の入力を楽にする）
+      const fix = data.edges.filter((e) => {
+        if (e.kind === 'stairs' || (e.from !== v.id && e.to !== v.id)) return false
+        const other = data.nodes.find((n) => n.id === (e.from === v.id ? e.to : e.from))
+        return other !== undefined && other.floor !== v.floor
+      })
+      for (const e of fix) await saveAndReload('edges', 'update', { ...e, kind: 'stairs' }, `階を変えたので、${fix.length}本の辺を「階段」にしました`)
+    }
     setSaving(false)
     if (r.ok) onDone(v.id)
   }
@@ -670,5 +737,39 @@ export function KindLegend() {
         選んでいるノード
       </span>
     </div>
+  )
+}
+
+/**
+ * 「地図で見る」で飛んできたノードの目印
+ * ・拡大の目印にする見えない四角（id="editor-focus"・周り15m）
+ * ・広がる輪と、ID・目印の名前を書いた吹き出し（そのノードを選んでいる間だけ）
+ */
+function FocusCallout({ node, show }: { node: PlacedNode; show: boolean }) {
+  const px = useMapScale()
+  const upright = useUpright()
+  const { x, y } = node.pos
+  const m = 15
+  const label = `${node.id}${node.landmark ? `　${node.landmark}` : ''}（${node.floor}階）`
+  const w = Math.max(80, label.length * 11) * px
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <rect id="editor-focus" x={x - m} y={y - m} width={m * 2} height={m * 2} fill="none" stroke="none" />
+      {show && (
+        <>
+          <circle cx={x} cy={y} r={10 * px} fill="none" stroke="var(--selected)" strokeWidth={3 * px}>
+            <animate attributeName="r" values={`${8 * px};${22 * px};${8 * px}`} dur="1.6s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="1;0.2;1" dur="1.6s" repeatCount="indefinite" />
+          </circle>
+          <g transform={upright(node.pos)}>
+            <rect x={x - w / 2} y={y - 40 * px} width={w} height={22 * px} rx={6 * px} fill="var(--selected)" />
+            <polygon points={`${x - 6 * px},${y - 18 * px} ${x + 6 * px},${y - 18 * px} ${x},${y - 10 * px}`} fill="var(--selected)" />
+            <text x={x} y={y - 29 * px} fontSize={12 * px} fontWeight="bold" fill="#fff" textAnchor="middle" dominantBaseline="central">
+              {label}
+            </text>
+          </g>
+        </>
+      )}
+    </g>
   )
 }

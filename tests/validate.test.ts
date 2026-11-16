@@ -191,3 +191,17 @@ describe('guessRoom（目印の名前から部屋を推測）', () => {
     expect(guessRoom('会議室')).toEqual({ name: '会議室', drawingName: '会議室', category: 'admin' })
   })
 })
+
+describe('issueNodeIds（問題からノードを探す）', () => {
+  it('ノード・辺・部屋・チェックポイントの問題から、対象のノードを返す', async () => {
+    const { issueNodeIds } = await import('../src/admin/issueTarget.ts')
+    const raw = sample()
+    expect(issueNodeIds({ target: 'ノード B1-1F-S1' }, raw)).toEqual(['B1-1F-S1'])
+    expect(issueNodeIds({ target: 'ノード B1-1F-S1・B1-2F-S1' }, raw)).toEqual(['B1-1F-S1', 'B1-2F-S1'])
+    expect(issueNodeIds({ target: '辺 B1-1F-S1 → B1-2F-S1' }, raw)).toEqual(['B1-1F-S1', 'B1-2F-S1'])
+    expect(issueNodeIds({ target: '部屋 職員室（R-1-1F-shokuin）' }, raw)).toEqual(['B1-1F-D-shokuin'])
+    expect(issueNodeIds({ target: 'チェックポイント CP01' }, raw)).toEqual(['B1-1F-D-jimu'])
+    expect(issueNodeIds({ target: '辺 B1-1F-S1 → NOPE' }, raw)).toEqual(['B1-1F-S1'])
+    expect(issueNodeIds({ target: '棟 1' }, raw)).toEqual([])
+  })
+})

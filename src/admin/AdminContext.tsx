@@ -16,6 +16,10 @@ export type AdminContextValue = {
   ) => Promise<{ ok: boolean; id?: number | string }>
   reload: () => Promise<void>
   notify: (message: string, issues?: Issue[]) => void
+  /** 地図エディタでそのノードを表示する（問題の一覧の「地図で見る」） */
+  showNode: (nodeId: string) => void
+  /** 地図エディタへの表示の依頼（seq は押すたびに変わる） */
+  focusRequest: { id: string; seq: number } | null
 }
 
 export const AdminContext = createContext<AdminContextValue | null>(null)

@@ -352,3 +352,19 @@ table.data tr {
   font-style: normal;
   font-weight: bold;
 }
+
+/* 問題の一覧の「地図で見る」 */
+.issue-jump {
+  margin-left: 8px;
+  padding: 2px 10px;
+  font-size: 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-main);
+  background: #fff;
+  color: var(--color-main);
+  cursor: pointer;
+}
+.issue-fatal .issue-jump {
+  border-color: var(--error);
+  color: var(--error);
+}

@@ -10,6 +10,7 @@ import RoomsEditor from './RoomsEditor.tsx'
 import RoutePreview from './RoutePreview.tsx'
 import SurveyNotes from './SurveyNotes.tsx'
 import TopPage from './TopPage.tsx'
+import IssueItem from './IssueItem.tsx'
 
 // 管理コンソールの入口（設計書 7.4）
 // ログインの確認 → データの読み込み → タブで各画面を切り替える
@@ -36,6 +37,11 @@ export default function AdminHome() {
   const [data, setData] = useState<AdminData | null>(null)
   const [tab, setTab] = useState<TabId>(tabFromHash)
   const [notice, setNotice] = useState<{ message: string; issues: Issue[]; error: boolean } | null>(null)
+  const [focusRequest, setFocusRequest] = useState<{ id: string; seq: number } | null>(null)
+  const showNode = useCallback((id: string) => {
+    setFocusRequest({ id, seq: Date.now() })
+    window.location.hash = '#map'
+  }, [])
 
   useEffect(() => {
     fetchMe().then(setUser).catch(() => setUser(null))
@@ -117,11 +123,15 @@ export default function AdminHome() {
           <span>{notice.message}</span>
           {notice.issues.length > 0 && (
             <ul>
-              {notice.issues.map((i, k) => (
-                <li key={k}>
-                  {i.target}: {i.message}
-                </li>
-              ))}
+              {notice.issues.map((i, k) =>
+                data ? (
+                  <IssueItem key={k} issue={i} data={data} onShow={showNode} />
+                ) : (
+                  <li key={k}>
+                    {i.target}: {i.message}
+                  </li>
+                ),
+              )}
             </ul>
           )}
           <button type="button" className="link" onClick={() => setNotice(null)}>
@@ -133,7 +143,7 @@ export default function AdminHome() {
       {!data ? (
         <p className="admin-pad">データを読み込み中…</p>
       ) : (
-        <AdminContext.Provider value={{ user, data, saveAndReload, reload, notify }}>
+        <AdminContext.Provider value={{ user, data, saveAndReload, reload, notify, showNode, focusRequest }}>
           <main className="admin-main">
             {tab === 'top' && <TopPage />}
             {tab === 'survey' && <SurveyNotes />}
