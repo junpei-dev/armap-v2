@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { averageAngles, deviceHeading } from '../core/heading.ts'
+import { averageAngles, deviceHeading, cameraElevation } from '../core/heading.ts'
 
 // 端末の向き（動きセンサー）を読むフック（設計書 6.6）
 // ・iPhone は、ボタンを押したときに許可を求める必要がある（requestOrientationPermission）
@@ -36,7 +36,11 @@ export async function requestOrientationPermission(): Promise<SensorStatus> {
   let status: SensorStatus = 'granted'
   if (typeof E.requestPermission === 'function') {
     try {
+      // 歩数計（useStepCounter）が使う加速度も、同じ操作の中で許可を求めておく（iPhone では窓口が別）
+      const M = globalThis.DeviceMotionEvent as { requestPermission?: () => Promise<'granted' | 'denied'> } | undefined
+      const motion = typeof M?.requestPermission === 'function' ? M.requestPermission().catch(() => 'denied') : null
       status = (await E.requestPermission()) === 'granted' ? 'granted' : 'denied'
+      await motion
     } catch {
       status = 'denied'
     }
@@ -56,6 +60,7 @@ export async function requestOrientationPermission(): Promise<SensorStatus> {
 export function useDeviceHeading(enabled: boolean) {
   const [heading, setHeading] = useState<number | null>(null)
   const [working, setWorking] = useState(false)
+  const [elevation, setElevation] = useState<number | null>(null) // カメラの上向きの角度（地面の印の位置決めに使う）
   const headingRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -74,6 +79,7 @@ export function useDeviceHeading(enabled: boolean) {
       if (now - lastUpdate > 100) {
         lastUpdate = now
         setHeading(avg)
+        setElevation(cameraElevation(e.beta, e.gamma))
         setWorking(true)
       }
     }
@@ -81,5 +87,5 @@ export function useDeviceHeading(enabled: boolean) {
     return () => window.removeEventListener('deviceorientation', onOrientation)
   }, [enabled])
 
-  return { heading, headingRef, working }
+  return { heading, headingRef, working, elevation }
 }

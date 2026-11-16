@@ -1,8 +1,10 @@
 import jsQR from 'jsqr'
-import { useEffect, useRef, useState } from 'react'
-import { arrowRotation, checkpointFromQr, type Confidence } from '../core/heading.ts'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { arrowRotation, checkpointFromQr, type Confidence, projectGround } from '../core/heading.ts'
+import { angleDiff } from '../core/geometry.ts'
 import { cssMatrix3d } from '../core/homography.ts'
 import type { Step } from '../core/route.ts'
+import type { Progress } from '../core/steps.ts'
 import { cameraMessage, useCamera } from '../hooks/useCamera.ts'
 import type { Point } from '../types.ts'
 
@@ -20,6 +22,11 @@ type Props = {
   stepIndex: number
   stepCount: number
   targetBearing: number | null // 進む方向（図面角度）
+  targetName: string // 次に目指す地点の呼び名（曲がり角・階段・目的地の名前など）
+  progress: Progress | null // 残りの距離と「まもなく…」の知らせ（歩数計が使えないときは null）
+  target: { bearing: number; distance: number } | null // 次に目指す地点の方向（図面角度）と距離（m）の見積もり
+  elevation: number | null // カメラの上向きの角度（度）
+  mini: ReactNode // 右上に出す小さな地図（いまの区間・次に目指す地点・自分の位置）
   userHeading: number | null // 利用者の向き（図面角度）。基準合わせ前は null
   confidence: Confidence
   isLast: boolean
@@ -39,7 +46,7 @@ const REANCHOR_MS = 2000 // 同じQRでも、これだけ離れてからもう�
 type Marker = { cp: string; angle: number | null; step: number; quad: Quad; lost: boolean }
 
 export default function CameraOverlay(props: Props) {
-  const { step, stepIndex, stepCount, targetBearing, userHeading, confidence, isLast, onNext, onPrev, onClose } = props
+  const { step, stepIndex, stepCount, targetBearing, targetName, progress, target, elevation, mini, userHeading, confidence, isLast, onNext, onPrev, onClose } = props
   const videoRef = useRef<HTMLVideoElement>(null)
   const camera = useCamera(videoRef)
   const [marker, setMarker] = useState<Marker | null>(null)
@@ -128,6 +135,13 @@ export default function CameraOverlay(props: Props) {
   const mode: 'wall' | 'floor' | 'none' = message ? 'none' : wall && (!wall.lost || !hasHeading) ? 'wall' : hasHeading ? 'floor' : 'none'
   const rotation = hasHeading ? arrowRotation(userHeading, targetBearing) : 0
 
+  // 地面の印: 次に目指す地点のおおよその位置に置く。向きが分かっていて（床の矢印のとき）、画面に入るときだけ
+  const ground =
+    mode === 'floor' && userHeading !== null && target && elevation !== null && target.distance <= 60
+      ? projectGround(angleDiff(userHeading, target.bearing), target.distance, elevation, window.innerWidth, window.innerHeight)
+      : null
+  const ringR = ground ? Math.min(90, Math.max(16, ground.scale * 0.7)) : 0 // 半径 0.7m の輪
+
   let status = 'QRコードを映すと矢印が出ます'
   let statusClass = ''
   if (mode === 'wall' && wall) {
@@ -143,10 +157,17 @@ export default function CameraOverlay(props: Props) {
       <video ref={videoRef} className="v-camera-video" playsInline muted />
 
       <div className="v-ar-top">
-        <button type="button" className="v-chip" onClick={onClose}>
-          ‹ 地図に戻る
-        </button>
-        {!message && <span className={`v-chip v-chip-status ${statusClass}`}>{status}</span>}
+        <div className="v-ar-left">
+          <button type="button" className="v-chip" onClick={onClose}>
+            ‹ 地図に戻る
+          </button>
+          {!message && <span className={`v-chip v-chip-status ${statusClass}`}>{status}</span>}
+        </div>
+        {/* 次に目指す地点を、小さな地図で示す（輪の印が次の地点・青い丸が自分） */}
+        <div className="v-ar-mini">
+          {mini}
+          <span className="v-ar-mini-label">次: {targetName}</span>
+        </div>
       </div>
 
       {message && <p className="v-ar-center">{message}</p>}
@@ -183,11 +204,24 @@ export default function CameraOverlay(props: Props) {
         </div>
       )}
 
-      {mode === 'floor' && (
+      {ground && (
+        <div className={`v-ground ${confidence === 'low' ? 'low' : ''}`} style={{ left: ground.x, top: ground.y }} aria-hidden>
+          {/* 地面に寝かせた輪（遠いほど小さい）と、その上に立てた札 */}
+          <span className="v-ground-ring" style={{ width: ringR * 2, height: ringR * 0.7 }} />
+          <span className="v-ground-pin" />
+          <span className="v-ground-label">
+            {targetName}
+            <small>このあたり・約{Math.max(1, Math.round(target!.distance))}m</small>
+          </span>
+        </div>
+      )}
+
+      {/* 地面の印が画面に入っている間は、それが進む先を示すので矢印は出さない（重なって読めなくなるため） */}
+      {mode === 'floor' && !ground && (
         <div className={`v-ar-arrow ${confidence === 'low' ? 'low' : ''}`} aria-hidden>
           {/* 画面の上 = 利用者の正面。進む方向へ回してから、床に寝かせる */}
           <div style={{ transform: `perspective(700px) rotateX(58deg) rotate(${rotation}deg)` }}>
-            <svg viewBox="-50 -60 100 120" width="200" height="240">
+            <svg viewBox="-50 -60 100 120" width="150" height="180">
               <path
                 d="M0 -55 L42 -8 L16 -8 L16 55 L-16 55 L-16 -8 L-42 -8 Z"
                 fill="var(--me, #1c7ed6)"
@@ -205,6 +239,11 @@ export default function CameraOverlay(props: Props) {
         {mode === 'floor' && confidence === 'low' && (
           <p className="v-overlay-sub">近くのQRコードを映すと、矢印が正確になります</p>
         )}
+        {progress && (
+          <p className={`v-overlay-progress ${progress.near ? 'near' : ''}`} role="status">
+            {progress.text}
+          </p>
+        )}
         <div className="v-overlay-step">
           <span className="v-overlay-count">
             {stepIndex + 1} / {stepCount}
@@ -215,7 +254,7 @@ export default function CameraOverlay(props: Props) {
           <button type="button" className="v-secondary" onClick={onPrev} disabled={stepIndex === 0}>
             戻る
           </button>
-          <button type="button" className="v-primary" onClick={onNext}>
+          <button type="button" className={`v-primary ${progress?.near ? 'v-pulse' : ''}`} onClick={onNext}>
             {isLast ? '着いた' : '次へ'}
           </button>
         </div>

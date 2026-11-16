@@ -65,6 +65,9 @@ export function normalize(table: EditableTable, value: unknown): unknown {
         floors: integer(o.floors, '階数'),
         outline,
       }
+      const shortName = text(o.shortName, '地図に出す短い名前', false)
+      if (shortName.length > 10) throw new InputError('地図に出す短い名前は10文字までにしてください')
+      if (shortName) b.shortName = shortName
       if (o.label) b.label = point(o.label, '棟名の位置')
       if (o.origin) b.origin = point(o.origin, '基準点')
       if (o.rotation !== undefined && o.rotation !== null && o.rotation !== '') {

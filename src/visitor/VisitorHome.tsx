@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
 import { fetchCampusData } from '../api/visitor.ts'
 import { placeNodes, START_CHECKPOINT_ID } from '../core/campus.ts'
-import { angleDiff, normalizeAngle } from '../core/geometry.ts'
+import { angleDiff, normalizeAngle, planAngle } from '../core/geometry.ts'
 import { anchorOffset, confidence, planHeading } from '../core/heading.ts'
 import { planRoute, startHint, stepBearing, stepForNode } from '../core/route.ts'
+import { STRIDE_M, stepProgress, stepTargetName, walkedPath } from '../core/steps.ts'
+import CampusMap from '../components/CampusMap.tsx'
+import RouteLayer from '../components/RouteLayer.tsx'
 import {
   requestOrientationPermission,
   savedSensorStatus,
   type SensorStatus,
   useDeviceHeading,
 } from '../hooks/useDeviceHeading.ts'
+import { useStepCounter } from '../hooks/useStepCounter.ts'
 import type { CampusData } from '../types.ts'
 import ArrivedScreen from './ArrivedScreen.tsx'
 import CameraOverlay from './CameraOverlay.tsx'
@@ -33,7 +37,14 @@ export default function VisitorHome() {
   const [toast, setToast] = useState<string | null>(null)
   // QRで向きを合わせた記録（offset: 端末の角度→図面角度の差、step: そのときの区間、at: 時刻）
   const [anchor, setAnchor] = useState<{ offset: number; step: number; at: number } | null>(null)
-  const { heading, headingRef, working } = useDeviceHeading(state.screen === 'guide' && sensor === 'granted')
+  const { heading, headingRef, working, elevation } = useDeviceHeading(state.screen === 'guide' && sensor === 'granted')
+
+  // 歩数計: いまの区間を何m歩いたかの見積もりに使う（区間が変わるたび・QRを読むたびに 0 から数え直す）
+  const { steps, working: stepsWorking } = useStepCounter(state.screen === 'guide' && sensor === 'granted')
+  const walkKey = `${state.screen}/${state.originCp}/${state.destination}/${state.step}/${anchor?.at ?? 0}`
+  const [walkBase, setWalkBase] = useState({ key: '', steps: 0 })
+  if (walkBase.key !== walkKey) setWalkBase({ key: walkKey, steps })
+  const walked = stepsWorking && walkBase.key === walkKey ? Math.max(0, steps - walkBase.steps) * STRIDE_M : stepsWorking ? 0 : null
 
   useEffect(() => {
     fetchCampusData().then(setData, (e: Error) => setError(e.message))
@@ -123,6 +134,24 @@ export default function VisitorHome() {
     [data, placed, room],
   )
 
+  // いまの区間と、その中での進み具合（歩数計が使えるときだけ）
+  const stepIndex = route ? Math.min(state.step, route.steps.length - 1) : 0
+  const current = route?.steps[stepIndex] ?? null
+  const progress = current && walked !== null ? stepProgress(current, walked, room?.name) : null
+  const near = progress?.near ?? false
+  // 次に目指す地点が、いまの位置（見積もり）から見てどの方向・どれだけ先か（カメラの地面の印に使う）
+  const target = useMemo(() => {
+    if (!current) return null
+    const pts = current.nodes.map((n) => n.pos)
+    const me = walkedPath(pts, walked ?? 0).at(-1) ?? current.from.pos
+    const distance = Math.hypot(current.to.pos.x - me.x, current.to.pos.y - me.y)
+    return distance < 1.5 ? null : { bearing: planAngle(me, current.to.pos), distance }
+  }, [current, walked])
+  // 区間の終わりに近づいたら、1回だけ震えて知らせる
+  useEffect(() => {
+    if (near) navigator.vibrate?.([80, 60, 80])
+  }, [near, walkKey])
+
   if (error) {
     return (
       <Message title="読み込めませんでした">
@@ -189,18 +218,29 @@ export default function VisitorHome() {
           room={room}
           step={state.step}
           startHint={startHint(route, data.checkpoints)}
+          walked={walked}
+          progress={progress}
           onNext={() => dispatch({ type: 'next', lastStep: route.steps.length - 1 })}
           onPrev={() => dispatch({ type: 'prev' })}
           onOverview={() => dispatch({ type: 'back' })}
           onCamera={() => setCamera(true)}
         />
       )}
-      {screen === 'guide' && route && camera && (
+      {screen === 'guide' && room && route && current && camera && (
         <CameraOverlay
-          step={route.steps[Math.min(state.step, route.steps.length - 1)]}
-          stepIndex={Math.min(state.step, route.steps.length - 1)}
+          step={current}
+          stepIndex={stepIndex}
           stepCount={route.steps.length}
-          targetBearing={stepBearing(route.steps[Math.min(state.step, route.steps.length - 1)])}
+          targetBearing={stepBearing(current)}
+          targetName={stepTargetName(current, room.name)}
+          target={target}
+          elevation={elevation}
+          progress={progress}
+          mini={
+            <CampusMap buildings={data.buildings} highlight={[room.building]} zoomToId="camera-focus" zoomKey={`${origin.cp.id}/${stepIndex}`} height={136}>
+              <RouteLayer route={route} activeStep={stepIndex} animate focusId="camera-focus" progress={walked} />
+            </CampusMap>
+          }
           userHeading={anchor && heading !== null ? planHeading(heading, anchor.offset) : null}
           confidence={confidence(
             anchor ? { at: anchor.at, stepsSince: Math.max(0, state.step - anchor.step) } : null,

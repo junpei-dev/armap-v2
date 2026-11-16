@@ -2,6 +2,7 @@ import CampusMap from '../components/CampusMap.tsx'
 import Icon from '../components/Icon.tsx'
 import RouteLayer from '../components/RouteLayer.tsx'
 import type { Action, Route } from '../core/route.ts'
+import type { Progress } from '../core/steps.ts'
 import type { CampusData, Room } from '../types.ts'
 
 // ③ 案内（要件 F-21〜F-28・F-31）
@@ -15,13 +16,15 @@ type Props = {
   room: Room
   step: number
   startHint: string | null // 最初の区間だけに出す「○○を背にして、右へ進みます」
+  walked: number | null // いまの区間を歩いた距離の見積もり（m）。歩数計が使えないときは null
+  progress: Progress | null // 残りの距離と「まもなく…」の知らせ
   onNext: () => void
   onPrev: () => void
   onOverview: () => void
   onCamera: () => void
 }
 
-export default function GuideScreen({ data, route, room, step, startHint, onNext, onPrev, onOverview, onCamera }: Props) {
+export default function GuideScreen({ data, route, room, step, startHint, walked, progress, onNext, onPrev, onOverview, onCamera }: Props) {
   const s = route.steps[Math.min(step, route.steps.length - 1)]
   const isLast = step >= route.steps.length - 1
 
@@ -52,8 +55,16 @@ export default function GuideScreen({ data, route, room, step, startHint, onNext
           <p className="v-instruction-floor">
             <span className="v-pill">いま {s.floor}階</span>
             {s.checkpoint && <span className="v-pill v-pill-me">この先にQRコード</span>}
+            {progress && !progress.near && <span className="v-pill v-pill-me">{progress.text}</span>}
           </p>
         </div>
+        {/* 歩いた距離の見積もりで、区間の終わりに近づいたら知らせる */}
+        {progress?.near && (
+          <p className="v-near" role="status">
+            {progress.text}
+            <small>着いたら「{isLast ? '着いた' : '次へ'}」を押してください</small>
+          </p>
+        )}
       </section>
 
       <button type="button" className="v-camera-button" onClick={onCamera}>
@@ -71,10 +82,10 @@ export default function GuideScreen({ data, route, room, step, startHint, onNext
         buildings={data.buildings}
         highlight={[room.building]}
         zoomToId="guide-focus"
-        zoomKey={step}
+        zoomKey={`${route.nodes[0].id}/${step}`}
         height="min(40vh, 340px)"
       >
-        <RouteLayer route={route} activeStep={step} animate focusId="guide-focus" />
+        <RouteLayer route={route} activeStep={step} animate focusId="guide-focus" progress={walked} />
       </CampusMap>
 
       <p className="v-note">
@@ -85,7 +96,7 @@ export default function GuideScreen({ data, route, room, step, startHint, onNext
         <button type="button" className="v-secondary" onClick={onPrev} disabled={step === 0}>
           戻る
         </button>
-        <button type="button" className="v-primary" onClick={onNext}>
+        <button type="button" className={`v-primary ${progress?.near ? 'v-pulse' : ''}`} onClick={onNext}>
           {isLast ? '着いた' : '次へ'}
         </button>
       </div>

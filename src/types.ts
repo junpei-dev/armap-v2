@@ -16,6 +16,7 @@ export type BuildingPlacement = {
 export type Building = {
   id: string // 施設台帳の棟番号。例: "1", "28"
   name: string // 来校者向けの名前
+  shortName?: string // 地図に出す短い名前（例: '機械'）。無ければ棟番号を出す
   drawingName: string // 図面上の名前
   floors: number
   outline: Point[] // 外形（全体座標）

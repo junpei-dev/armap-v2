@@ -148,6 +148,19 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
             {buildings.map((b) => {
               const label = b.label ?? centroid(b.outline)
               const isFocus = b.id === focus
+              // 棟の上に書く文字: 短い名前があればそれ、無ければ棟番号。
+              // 棟からはみ出さない大きさにし、縦に細長い棟では縦書きにする
+              const name = b.shortName || b.id
+              const xs = b.outline.map((p) => p.x)
+              const ys = b.outline.map((p) => p.y)
+              const w = Math.max(...xs) - Math.min(...xs)
+              const h = Math.max(...ys) - Math.min(...ys)
+              const vertical = !!b.shortName && name.length > 1 && h > w * 1.3
+              const along = vertical ? h : w
+              const across = vertical ? w : h
+              const fontSize = b.shortName
+                ? Math.min(13 * metersPerPx, across * 0.72, (along * 0.92) / name.length)
+                : 11 * metersPerPx
               return (
                 <g key={b.id}>
                   <polygon
@@ -160,14 +173,15 @@ export default function CampusMap({ buildings, highlight = [], focus, onTap, hei
                   <text
                     x={label.x}
                     y={label.y}
-                    fontSize={11 * metersPerPx}
+                    fontSize={fontSize}
+                    fontWeight={b.shortName ? 'bold' : undefined}
                     textAnchor="middle"
                     dominantBaseline="central"
                     fill="var(--map-label)"
                     transform={view.upright(label)}
-                    style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    style={{ pointerEvents: 'none', userSelect: 'none', writingMode: vertical ? 'vertical-rl' : undefined }}
                   >
-                    {b.id}
+                    {name}
                   </text>
                 </g>
               )

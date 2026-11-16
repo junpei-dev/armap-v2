@@ -3,6 +3,7 @@ import { type AdminUser, fetchAdminData, fetchMe, login, logout, save, SaveError
 import type { AdminData, Issue } from '../types.ts'
 import { AdminContext, type AdminContextValue } from './AdminContext.tsx'
 import './admin.css'
+import BuildingsEditor from './BuildingsEditor.tsx'
 import CheckpointsEditor from './CheckpointsEditor.tsx'
 import HistoryPage from './HistoryPage.tsx'
 import MapEditor from './MapEditor.tsx'
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'survey', label: '現地調査メモ' },
   { id: 'map', label: '地図エディタ' },
   { id: 'rooms', label: '部屋' },
+  { id: 'buildings', label: '棟の名前' },
   { id: 'checkpoints', label: 'チェックポイント' },
   { id: 'preview', label: '経路の確認' },
   { id: 'history', label: '変更履歴' },
@@ -161,6 +163,7 @@ export default function AdminHome() {
             {tab === 'survey' && <SurveyNotes />}
             {tab === 'map' && <MapEditor />}
             {tab === 'rooms' && <RoomsEditor />}
+            {tab === 'buildings' && <BuildingsEditor />}
             {tab === 'checkpoints' && <CheckpointsEditor />}
             {tab === 'preview' && <RoutePreview />}
             {tab === 'history' && <HistoryPage />}

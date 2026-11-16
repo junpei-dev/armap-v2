@@ -68,3 +68,25 @@ describe('その他', () => {
     expect(checkpointFromQr('こんにちは')).toBeNull()
   })
 })
+
+describe('地面の印', () => {
+  it('スマホをまっすぐ立てると、カメラは水平', async () => {
+    const { cameraElevation } = await import('../src/core/heading.ts')
+    expect(cameraElevation(90, 0)).toBeCloseTo(0)
+    expect(cameraElevation(60, 0)).toBeCloseTo(-30) // 手前に倒すと下向き
+  })
+  it('正面の地面の点は画面の中央の下、遠いほど中央（地平線）に近づく', async () => {
+    const { projectGround } = await import('../src/core/heading.ts')
+    const near = projectGround(0, 3, 0, 400, 800)!
+    const far = projectGround(0, 20, 0, 400, 800)!
+    expect(near.x).toBeCloseTo(200)
+    expect(near.y).toBeGreaterThan(far.y)
+    expect(far.y).toBeGreaterThan(400)
+    expect(far.scale).toBeLessThan(near.scale)
+  })
+  it('右にある点は画面の右、後ろにある点は出さない', async () => {
+    const { projectGround } = await import('../src/core/heading.ts')
+    expect(projectGround(15, 10, 0, 400, 800)!.x).toBeGreaterThan(200)
+    expect(projectGround(170, 10, 0, 400, 800)).toBeNull()
+  })
+})

@@ -28,6 +28,7 @@ export function buildingFromRow(r: Row): Building {
   return {
     id: String(r.id),
     name: String(r.name),
+    ...(r.short_name ? { shortName: String(r.short_name) } : {}),
     drawingName: String(r.drawing_name),
     floors: Number(r.floors),
     outline: JSON.parse(String(r.outline)),
@@ -144,6 +145,7 @@ export const TABLES: Record<
     toColumns: (b: Building) => ({
       id: b.id,
       name: b.name,
+      short_name: b.shortName ?? null,
       drawing_name: b.drawingName,
       floors: b.floors,
       outline: JSON.stringify(b.outline),

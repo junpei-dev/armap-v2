@@ -613,3 +613,8 @@ ul.issues li.issue-fatal {
   font-style: normal;
   font-weight: bold;
 }
+
+/* 表が広くても、ページ全体は横に流さない */
+.split > * {
+  min-width: 0;
+}

@@ -1,12 +1,14 @@
 import type { Route } from '../core/route.ts'
+import { walkedPath } from '../core/steps.ts'
 import type { Point } from '../types.ts'
 import { useMapScale, useUpright } from './CampusMap.tsx'
 
 // 全体マップに道順を描く（要件 F-16・F-27）。CampusMap の children に入れて使う
-// ・1階の区間は実線、2階以上の区間は点線にして「○F」を添える
+// ・これから歩く道はオレンジ、歩き終えた道は青（1階は実線、2階以上は点線にして「○F」を添える）
 // ・出発点は ◎、目的地は ●
-// ・activeStep を渡すと、その区間を太く強調する
-// ・animate を付けると、自分の位置を表す青い三角が道順に沿って進むアニメーションを出す
+// ・activeStep を渡すと、その区間を太く強調し、区間の終わり（次に目指す地点）に輪を出す
+// ・progress（いまの区間を歩いた距離・m）を渡すと、そこまでを青く塗り、その位置に自分の印（青い丸）を置く
+// ・progress が無く animate を付けたときは、自分の位置を表す青い三角が道順に沿って進むアニメーションを出す
 //   （activeStep があればその区間だけ、無ければ全体。終わったら少し止まって繰り返す）
 // ・focusId を渡すと、強調する区間を囲む見えない四角にその id を付ける（地図をそこへ拡大するため）
 
@@ -18,20 +20,25 @@ export default function RouteLayer({
   activeStep,
   animate = false,
   focusId,
+  progress = null,
 }: {
   route: Route
   activeStep?: number
   animate?: boolean
   focusId?: string
+  progress?: number | null
 }) {
   const px = useMapScale()
   const upright = useUpright()
   const start = route.nodes[0]
   const goal = route.nodes[route.nodes.length - 1]
+  const current = activeStep !== undefined ? route.steps[activeStep] : undefined
 
   // アニメーションと拡大の対象になる点の並び
-  const focusPts: Point[] =
-    activeStep !== undefined && route.steps[activeStep] ? route.steps[activeStep].nodes.map((n) => n.pos) : route.nodes.map((n) => n.pos)
+  const focusPts: Point[] = current ? current.nodes.map((n) => n.pos) : route.nodes.map((n) => n.pos)
+  // いまの区間で、歩いた所までの道（最後の点が自分の位置）
+  const walked = current && progress !== null ? walkedPath(focusPts, progress) : null
+  const me = walked ? walked[walked.length - 1] : null
 
   return (
     <g style={{ pointerEvents: 'none' }}>
@@ -39,6 +46,7 @@ export default function RouteLayer({
       {route.steps.map((step, i) => {
         const pts = step.nodes
         const active = activeStep === undefined || activeStep === i
+        const done = activeStep !== undefined && i < activeStep // 歩き終えた区間
         return (
           <g key={i}>
             {pts.slice(1).map((b, k) => {
@@ -52,11 +60,11 @@ export default function RouteLayer({
                   y1={a.pos.y}
                   x2={b.pos.x}
                   y2={b.pos.y}
-                  stroke="var(--route, #d9480f)"
-                  strokeWidth={(active ? 5 : 3) * px}
+                  stroke={done ? 'var(--me, #1c7ed6)' : 'var(--route, #d9480f)'}
+                  strokeWidth={(active ? 5 : 3.5) * px}
                   strokeLinecap="round"
                   strokeDasharray={upper ? `${6 * px} ${4 * px}` : undefined}
-                  opacity={active ? 0.95 : 0.35}
+                  opacity={active ? 0.95 : done ? 0.6 : 0.4}
                 />
               )
             })}
@@ -74,11 +82,38 @@ export default function RouteLayer({
           </g>
         )
       })}
+      {/* いまの区間で歩いた分を青く塗る */}
+      {walked && walked.length > 1 && (
+        <polyline
+          points={walked.map((p) => `${p.x},${p.y}`).join(' ')}
+          fill="none"
+          stroke="var(--me, #1c7ed6)"
+          strokeWidth={5 * px}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
       {/* 出発点 ◎ と 目的地 ● */}
       <circle cx={start.pos.x} cy={start.pos.y} r={9 * px} fill="#fff" stroke="var(--color-main)" strokeWidth={3 * px} />
       <circle cx={start.pos.x} cy={start.pos.y} r={4 * px} fill="var(--color-main)" />
       <circle cx={goal.pos.x} cy={goal.pos.y} r={9 * px} fill="var(--route, #d9480f)" stroke="#fff" strokeWidth={2.5 * px} />
-      {animate && <MovingMarker key={`${activeStep ?? 'all'}`} pts={focusPts} />}
+      {/* 次に目指す地点（区間の終わり）: 広がる輪で目立たせる */}
+      {current && current.to.id !== goal.id && (
+        <g>
+          <circle cx={current.to.pos.x} cy={current.to.pos.y} r={7 * px} fill="none" stroke="var(--route, #d9480f)" strokeWidth={2 * px}>
+            <animate attributeName="r" values={`${6 * px};${16 * px}`} dur="1.4s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.9;0" dur="1.4s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={current.to.pos.x} cy={current.to.pos.y} r={6 * px} fill="#fff" stroke="var(--route, #d9480f)" strokeWidth={3 * px} />
+        </g>
+      )}
+      {me && (
+        <g>
+          <circle cx={me.x} cy={me.y} r={13 * px} fill="var(--me, #1c7ed6)" opacity={0.2} />
+          <circle cx={me.x} cy={me.y} r={7 * px} fill="var(--me, #1c7ed6)" stroke="#fff" strokeWidth={2.5 * px} />
+        </g>
+      )}
+      {!me && animate && <MovingMarker key={`${activeStep ?? 'all'}`} pts={focusPts} />}
     </g>
   )
 }

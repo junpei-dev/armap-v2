@@ -657,7 +657,7 @@
 .v-ar-arrow {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 60%;
   transform: translate(-50%, -50%);
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
   transition: opacity 0.3s;
@@ -761,4 +761,149 @@
 .v-permission .v-actions-2 .v-secondary {
   flex-basis: 42%;
   font-size: 16px;
+}
+
+/* ---- 歩いた距離の見積もり（歩数計） ---- */
+.v-near {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff1e6;
+  border: 2px solid var(--route);
+  color: #a8380b;
+  font-size: 18px;
+  font-weight: bold;
+}
+.v-near small {
+  display: block;
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--color-text);
+}
+/* 着いたら押すボタンを、ゆっくり光らせて気づかせる */
+.v-pulse {
+  animation: v-pulse 1.2s ease-in-out infinite;
+}
+@keyframes v-pulse {
+  50% {
+    box-shadow: 0 0 0 8px rgba(31, 107, 58, 0.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v-pulse {
+    animation: none;
+    outline: 3px solid #8fbf9f;
+  }
+}
+
+/* カメラ案内の上の段: 左に戻る・状態、右に小さな地図 */
+.v-ar-top {
+  align-items: flex-start;
+}
+.v-ar-left {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  min-width: 0;
+}
+.v-ar-mini {
+  flex: none;
+  width: 136px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  pointer-events: none; /* 小さな地図は見るだけ（動かせない） */
+}
+.v-ar-mini .campus-map {
+  border-radius: 0;
+  box-shadow: none;
+}
+.v-ar-mini-label {
+  display: block;
+  padding: 3px 6px;
+  background: var(--route);
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.v-overlay-progress {
+  margin: 0;
+  justify-self: center;
+  padding: 5px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #155fa3;
+  font-size: 17px;
+  font-weight: bold;
+}
+.v-overlay-progress.near {
+  background: var(--route);
+  color: #fff;
+  font-size: 19px;
+}
+
+/* 地面の印（次に目指す地点のおおよその位置）。left/top が地面の点 */
+.v-ground {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transition: left 0.12s linear, top 0.12s linear, opacity 0.3s;
+}
+.v-ground.low {
+  opacity: 0.55;
+}
+.v-ground-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 4px solid #fff;
+  background: rgba(217, 72, 15, 0.45);
+  box-shadow: 0 0 0 3px var(--route), 0 2px 10px rgba(0, 0, 0, 0.5);
+  animation: v-ground 1.6s ease-in-out infinite;
+}
+@keyframes v-ground {
+  50% {
+    box-shadow: 0 0 0 9px rgba(217, 72, 15, 0.35), 0 2px 10px rgba(0, 0, 0, 0.5);
+  }
+}
+.v-ground-pin {
+  position: absolute;
+  left: -2px;
+  bottom: 0;
+  width: 4px;
+  height: 46px;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+}
+.v-ground-label {
+  position: absolute;
+  left: 0;
+  bottom: 44px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 10px;
+  background: var(--route);
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.v-ground-label small {
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
 }

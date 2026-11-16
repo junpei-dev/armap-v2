@@ -101,3 +101,47 @@ export function checkpointFromQr(text: string): string | null {
     return null
   }
 }
+
+// ---------------------------------------------------------------
+// 地面の印（次に目指す地点のおおよその位置に、カメラの映像の上で印を置く）
+// ---------------------------------------------------------------
+
+/** 背面カメラが水平から何度上を向いているか（下向きは負）。スマホをまっすぐ立てると 0 */
+export function cameraElevation(beta: number, gamma: number): number {
+  // 背面カメラの向きの上下成分 = -cos β・cos γ（deviceHeading と同じ回転行列から）
+  return Math.asin(Math.max(-1, Math.min(1, -Math.cos(beta * RAD) * Math.cos(gamma * RAD)))) / RAD
+}
+
+/** 目の高さで構えたスマホのカメラの高さ（m）と、縦持ちのときの縦の画角（度）の見積もり */
+const CAMERA_HEIGHT_M = 1.4
+const VERTICAL_FOV_DEG = 62
+
+/**
+ * 地面の上の点が、画面のどこに見えるかを計算する（ピンホールカメラの式）
+ * @param relative  利用者の正面から見た方向（度・右が正）
+ * @param distance  そこまでの距離（m）
+ * @param elevation カメラの上向きの角度（cameraElevation）
+ * @param width,height 画面の大きさ（px）
+ * @returns 画面の位置と、その距離での 1m あたりのピクセル数。カメラの後ろ・画面の外なら null
+ * 機種ごとの画角や持つ高さの違いは考えないので、位置は「おおよそ」
+ */
+export function projectGround(
+  relative: number,
+  distance: number,
+  elevation: number,
+  width: number,
+  height: number,
+): { x: number; y: number; scale: number } | null {
+  const f = height / 2 / Math.tan((VERTICAL_FOV_DEG / 2) * RAD)
+  const right = distance * Math.sin(relative * RAD)
+  const forward = distance * Math.cos(relative * RAD)
+  const e = elevation * RAD
+  // 水平な座標（右・下・前）から、上へ e 傾いたカメラの座標へ
+  const depth = forward * Math.cos(e) - CAMERA_HEIGHT_M * Math.sin(e)
+  const down = CAMERA_HEIGHT_M * Math.cos(e) + forward * Math.sin(e)
+  if (depth < 0.5) return null
+  const x = width / 2 + (f * right) / depth
+  const y = height / 2 + (f * down) / depth
+  if (x < -40 || x > width + 40 || y < 0 || y > height) return null
+  return { x, y, scale: f / depth }
+}
