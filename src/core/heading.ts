@@ -175,7 +175,7 @@ export function projectGround(
 }
 
 /** これより近い目標だけ、床に輪を置く（遠い床は画面の中で地平線のすぐ下に詰まり、傾きの小さな誤差で大きくずれるため） */
-export const GROUND_NEAR_M = 6
+export const GROUND_NEAR_M = 10 // 2026-11-25 実機テストの結果、6m から 10m に広げた（もう少し早く床の印に切り替えたい）
 
 /**
  * 遠い目標の「方向の札」を、画面のどこに出すか
