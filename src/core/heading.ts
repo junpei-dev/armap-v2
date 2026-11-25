@@ -1,3 +1,4 @@
+import type { Point } from '../types.ts'
 import { angleDiff, normalizeAngle } from './geometry.ts'
 
 // 端末の向きと、AR表示の矢印の向き（設計書 6.6）
@@ -112,9 +113,35 @@ export function cameraElevation(beta: number, gamma: number): number {
   return Math.asin(Math.max(-1, Math.min(1, -Math.cos(beta * RAD) * Math.cos(gamma * RAD)))) / RAD
 }
 
-/** 目の高さで構えたスマホのカメラの高さ（m）と、縦持ちのときの縦の画角（度）の見積もり */
+/** 目の高さで構えたスマホのカメラの高さ（m）と、映像の長い辺（縦持ちでは縦）の画角（度）の見積もり */
 const CAMERA_HEIGHT_M = 1.4
 const VERTICAL_FOV_DEG = 62
+
+/**
+ * 画面の上で「カメラの正面から 1 ラジアンあたり何ピクセルか」（焦点距離・px）
+ * 映像は画面いっぱいに拡大・切り取り（object-fit: cover）して出しているので、
+ * 映像の長い辺の画角と、映像 → 画面の拡大率 scale から求める
+ */
+export function focalFromVideo(videoWidth: number, videoHeight: number, scale: number): number {
+  return (Math.max(videoWidth, videoHeight) / 2 / Math.tan((VERTICAL_FOV_DEG / 2) * RAD)) * scale
+}
+
+/**
+ * QRを斜めから映しているとき、その傾き（度）を、画面の上のQRの四隅から見積もる
+ * 返す値 θ: 「壁に向かってまっすぐ立った向き（掲示面の向き + 180）」 = 「カメラの向き」 + θ（時計回りが正）
+ *   近い側の辺は長く映る。右の辺が長い（右側が近い）＝ 壁の正面は、カメラの向きより右にある → θ > 0
+ *   tanθ = (2f / QRの幅) × (右の辺 − 左の辺) / (右の辺 + 左の辺)
+ * QRが小さく映っているときは誤差が大きいので null
+ */
+export function wallYaw(quad: [Point, Point, Point, Point], focal: number): number | null {
+  const len = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y)
+  const left = len(quad[0], quad[3])
+  const right = len(quad[1], quad[2])
+  const width = (len(quad[0], quad[1]) + len(quad[3], quad[2])) / 2
+  if (width < 60) return null
+  const deg = Math.atan(((2 * focal) / width) * ((right - left) / (right + left))) / RAD
+  return Math.abs(deg) > 50 ? null : deg
+}
 
 /**
  * 地面の上の点が、画面のどこに見えるかを計算する（ピンホールカメラの式）
@@ -131,8 +158,9 @@ export function projectGround(
   elevation: number,
   width: number,
   height: number,
+  focal?: number,
 ): { x: number; y: number; scale: number } | null {
-  const f = height / 2 / Math.tan((VERTICAL_FOV_DEG / 2) * RAD)
+  const f = focal ?? height / 2 / Math.tan((VERTICAL_FOV_DEG / 2) * RAD)
   const right = distance * Math.sin(relative * RAD)
   const forward = distance * Math.cos(relative * RAD)
   const e = elevation * RAD
@@ -144,4 +172,44 @@ export function projectGround(
   const y = height / 2 + (f * down) / depth
   if (x < -40 || x > width + 40 || y < 0 || y > height) return null
   return { x, y, scale: f / depth }
+}
+
+/** これより近い目標だけ、床に輪を置く（遠い床は画面の中で地平線のすぐ下に詰まり、傾きの小さな誤差で大きくずれるため） */
+export const GROUND_NEAR_M = 6
+
+/**
+ * 遠い目標の「方向の札」を、画面のどこに出すか
+ * ・左右は向き（relative）だけで決める
+ * ・上下は地平線の高さに置く。距離や持つ高さの見積もりを使わないので、手前・奥にずれない
+ * 画面の外（後ろや真横）なら side に 'left' / 'right' を返し、画面の端に「こちら」の印を出す
+ */
+export function directionMarker(
+  relative: number,
+  elevation: number,
+  width: number,
+  height: number,
+  focal?: number,
+): { x: number; y: number; side: 'left' | 'right' | null } {
+  const f = focal ?? height / 2 / Math.tan((VERTICAL_FOV_DEG / 2) * RAD)
+  // 地平線: 上へ e 傾いたカメラでは、画面の中央から f・tan(e) だけ下に見える
+  const horizon = height / 2 + f * Math.tan(elevation * RAD)
+  const y = Math.min(height * 0.6, Math.max(height * 0.24, horizon))
+  const margin = 56
+  if (Math.abs(relative) < 75) {
+    const x = width / 2 + f * Math.tan(relative * RAD)
+    if (x >= margin && x <= width - margin) return { x, y, side: null }
+  }
+  return { x: relative < 0 ? margin : width - margin, y, side: relative < 0 ? 'left' : 'right' }
+}
+
+/**
+ * 現地で「この向きが道の向き」を測ったときの、正しい掲示面の向き（現地調整・管理コンソール）
+ * @param wallHeading  QRを読んだときの「壁にまっすぐ向いた向き」（端末の角度・カメラの向き + wallYaw の平均）
+ * @param pathHeading  道（隣のノードの方）へカメラを向けたときの端末の角度
+ * @param pathBearing  図面の上での、その道の向き
+ * 壁にまっすぐ向いた向きと道の向きの差は、端末の角度でも図面の角度でも同じ。
+ * 図面角度で: (facing + 180) + (pathHeading − wallHeading) = pathBearing → facing を求める
+ */
+export function calibratedFacing(wallHeading: number, pathHeading: number, pathBearing: number): number {
+  return normalizeAngle(pathBearing - (pathHeading - wallHeading) - 180)
 }

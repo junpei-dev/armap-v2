@@ -90,3 +90,50 @@ describe('地面の印', () => {
     expect(projectGround(170, 10, 0, 400, 800)).toBeNull()
   })
 })
+
+describe('QRを斜めから映したときの傾き', () => {
+  /** カメラの正面 +Z・右 +X・下 +Y。壁の正面（壁へ向かう向き）をカメラの向きから theta 度右に回して、QRの四隅を写す */
+  function project(theta: number, offsetX = 0) {
+    const t = (theta * Math.PI) / 180
+    const f = 800
+    const n = { x: Math.sin(t), z: Math.cos(t) } // 壁へ向かう向き
+    const u = { x: Math.cos(t), z: -Math.sin(t) } // 壁に沿って右
+    const c = { x: offsetX, y: 0, z: 1.2 }
+    void n
+    const s = 0.2
+    const pt = (du: number, dv: number) => {
+      const X = c.x + u.x * du
+      const Y = c.y + dv
+      const Z = c.z + u.z * du
+      return { x: 400 + (f * X) / Z, y: 800 + (f * Y) / Z }
+    }
+    return { f, quad: [pt(-s / 2, -s / 2), pt(s / 2, -s / 2), pt(s / 2, s / 2), pt(-s / 2, s / 2)] as const }
+  }
+  it('正面から映すと 0 度', async () => {
+    const { wallYaw } = await import('../src/core/heading.ts')
+    const { f, quad } = project(0)
+    expect(wallYaw([...quad], f)).toBeCloseTo(0, 1)
+  })
+  it('20度・-25度の傾きを、2度以内で見積もる', async () => {
+    const { wallYaw } = await import('../src/core/heading.ts')
+    for (const theta of [20, -25]) {
+      const { f, quad } = project(theta, 0.15)
+      expect(Math.abs(wallYaw([...quad], f)! - theta)).toBeLessThan(2)
+    }
+  })
+})
+
+describe('方向の札と現地調整', () => {
+  it('正面の札は画面の中央、右の目標は右、真横より後ろは画面の端', async () => {
+    const { directionMarker } = await import('../src/core/heading.ts')
+    expect(directionMarker(0, 0, 400, 800).x).toBeCloseTo(200)
+    expect(directionMarker(10, 0, 400, 800).x).toBeGreaterThan(200)
+    expect(directionMarker(120, 0, 400, 800).side).toBe('right')
+    expect(directionMarker(-40, 0, 400, 800).side).toBe('left') // 縦持ちの画面は横が狭い
+  })
+  it('掲示面の向きの計算: 壁にまっすぐ向いて 30度、道へ向けて 120度、道の図面角度が 0度 → 掲示面は 90度', async () => {
+    const { calibratedFacing } = await import('../src/core/heading.ts')
+    // 壁へ向かう向き(図面) = 道の向き − 90 = 270 → 掲示面 = 90
+    expect(calibratedFacing(30, 120, 0)).toBeCloseTo(90)
+  })
+})

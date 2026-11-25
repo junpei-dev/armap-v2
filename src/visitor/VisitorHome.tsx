@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { fetchCampusData } from '../api/visitor.ts'
 import { placeNodes, START_CHECKPOINT_ID } from '../core/campus.ts'
 import { angleDiff, normalizeAngle, planAngle } from '../core/geometry.ts'
-import { anchorOffset, confidence, planHeading } from '../core/heading.ts'
+import { anchorOffset, averageAngles, confidence, planHeading } from '../core/heading.ts'
 import { planRoute, startHint, stepBearing, stepForNode } from '../core/route.ts'
 import { STRIDE_M, stepProgress, stepTargetName, walkedPath } from '../core/steps.ts'
 import CampusMap from '../components/CampusMap.tsx'
@@ -96,8 +96,11 @@ export default function VisitorHome() {
    * QRを読んだ（要件 F-30〜F-32）: 向きの基準を合わせ、その地点の区間へ。経路の外なら引き直す
    * 移った先の区間の番号を返す（登録の無いQRなら null）
    */
+  // QRを映している間に集めた「壁にまっすぐ向いた向き」（端末の角度）。平均して基準にする
+  const wallSamples = useRef<{ cp: string; list: number[] }>({ cp: '', list: [] })
+
   const onScanned = useCallback(
-    (cpId: string): number | null => {
+    (cpId: string, yaw: number | null = null): number | null => {
       const cp = data?.checkpoints.find((c) => c.id === cpId)
       if (!cp) {
         setToast('このQRコードは登録されていません')
@@ -111,12 +114,28 @@ export default function VisitorHome() {
         dispatch({ type: 'rerouteFrom', cp: cp.id })
       }
       const h = headingRef.current
-      if (h !== null) setAnchor({ offset: anchorOffset(cp.facing, h), step, at: Date.now() })
+      // 斜めから映していたら、その分（yaw）を足して「壁にまっすぐ向いた向き」にする
+      wallSamples.current = { cp: cp.id, list: h !== null ? [h + (yaw ?? 0)] : [] }
+      if (h !== null) setAnchor({ offset: anchorOffset(cp.facing, h + (yaw ?? 0)), step, at: Date.now() })
       const node = data?.nodes.find((n) => n.id === cp.node)
       setToast(`現在地を「${node?.landmark ?? cp.place}」に合わせました`)
       return step
     },
     [data, route, headingRef],
+  )
+
+  /** 同じQRを映し続けている間: 見積もりを集めて平均し、向きの基準を少しずつ正確にする（最大30回分） */
+  const onRefine = useCallback(
+    (cpId: string, yaw: number | null) => {
+      const cp = data?.checkpoints.find((c) => c.id === cpId)
+      const h = headingRef.current
+      const w = wallSamples.current
+      if (!cp || h === null || yaw === null || w.cp !== cpId || w.list.length >= 30) return
+      w.list.push(h + yaw)
+      const avg = averageAngles(w.list)
+      if (avg !== null) setAnchor((a) => (a ? { ...a, offset: anchorOffset(cp.facing, avg) } : a))
+    },
+    [data, headingRef],
   )
 
   /**
@@ -249,6 +268,7 @@ export default function VisitorHome() {
           )}
           isLast={state.step >= route.steps.length - 1}
           onFound={onScanned}
+          onRefine={onRefine}
           arrowFor={arrowFor}
           onNext={() => {
             // 着いたら、カメラは閉じて到着の画面へ

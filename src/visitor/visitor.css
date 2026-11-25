@@ -907,3 +907,84 @@
   font-size: 12px;
   font-weight: normal;
 }
+
+/* 遠い目標の「方向の札」（地平線の高さに立てる）。left/top が札の棒の先 */
+.v-sign {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  transition: left 0.12s linear, top 0.12s linear, opacity 0.3s;
+}
+.v-sign.low {
+  opacity: 0.55;
+}
+.v-sign-label {
+  position: absolute;
+  left: 0;
+  bottom: 40px;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  border-radius: 12px;
+  background: var(--route);
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1.3;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.v-sign-label small {
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
+}
+.v-sign-pole {
+  position: absolute;
+  left: -2px;
+  bottom: 0;
+  width: 4px;
+  height: 42px;
+  background: linear-gradient(#fff, rgba(255, 255, 255, 0.2));
+}
+/* 目標が画面の外（左右）にあるとき、画面の端に出す印 */
+.v-sign-edge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: translateY(-50%);
+  padding: 8px 12px;
+  background: var(--route);
+  color: #fff;
+  font-size: 30px;
+  font-weight: bold;
+  line-height: 1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: v-edge 1.2s ease-in-out infinite;
+}
+.v-sign-edge.left {
+  left: 0;
+  border-radius: 0 14px 14px 0;
+}
+.v-sign-edge.right {
+  right: 0;
+  border-radius: 14px 0 0 14px;
+}
+.v-sign-edge span {
+  font-size: 14px;
+  line-height: 1.3;
+}
+.v-sign-edge small {
+  display: block;
+  font-size: 12px;
+  font-weight: normal;
+}
+@keyframes v-edge {
+  50% {
+    opacity: 0.75;
+  }
+}

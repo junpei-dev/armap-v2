@@ -1,12 +1,11 @@
-import jsQR from 'jsqr'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { arrowRotation, checkpointFromQr, type Confidence, projectGround } from '../core/heading.ts'
+import { arrowRotation, type Confidence, directionMarker, GROUND_NEAR_M, projectGround, wallYaw } from '../core/heading.ts'
 import { angleDiff } from '../core/geometry.ts'
 import { cssMatrix3d } from '../core/homography.ts'
 import type { Step } from '../core/route.ts'
 import type { Progress } from '../core/steps.ts'
 import { cameraMessage, useCamera } from '../hooks/useCamera.ts'
-import type { Point } from '../types.ts'
+import { type Quad, useQrScanner } from '../hooks/useQrScanner.ts'
 
 // ④ カメラ案内（AR・要件 F-30〜F-34・F-40〜F-43、設計書 8.1・8.2）
 // 「QRを読む画面」と「矢印を見る画面」を1つにまとめた画面。カメラを開いたまま、次の流れが自動で進む
@@ -14,8 +13,6 @@ import type { Point } from '../types.ts'
 //   2. QRが映ったら、現在地と向きの基準を合わせ、QRの貼られた壁の上に進む方向の矢印を出す（マーカーAR）
 //   3. QRから目を離すと、前方の床に置いたような矢印に切り替わり、体の向きに合わせて回る（センサー）
 // 向きが分からない間（まだQRを映していない）は矢印を出さず、QRを映すよう案内する
-
-type Quad = [Point, Point, Point, Point]
 
 type Props = {
   step: Step
@@ -30,8 +27,13 @@ type Props = {
   userHeading: number | null // 利用者の向き（図面角度）。基準合わせ前は null
   confidence: Confidence
   isLast: boolean
-  /** QRを見つけた。現在地と向きを合わせ、移った先の区間の番号を返す（登録の無いQRなら null） */
-  onFound: (cp: string) => number | null
+  /**
+   * QRを見つけた。現在地と向きを合わせ、移った先の区間の番号を返す（登録の無いQRなら null）
+   * yaw: QRを斜めから映している分の見積もり（度・wallYaw）。QRが小さく映っているときは null
+   */
+  onFound: (cp: string, yaw: number | null) => number | null
+  /** 同じQRを映し続けている間、毎回呼ぶ（向きの基準を平均して正確にする） */
+  onRefine: (cp: string, yaw: number | null) => void
   /** その地点から進む向き（壁を見て立った人から見た角度。0=前・90=右・-90=左・180=後ろ）。無ければ null */
   arrowFor: (cp: string) => number | null
   onNext: () => void
@@ -52,80 +54,47 @@ export default function CameraOverlay(props: Props) {
   const [marker, setMarker] = useState<Marker | null>(null)
   const [wrongQr, setWrongQr] = useState(false)
   // 親から渡される関数は、描き直しのたびに変わることがある。読み取りをやり直さないよう ref で持つ
-  const handlers = useRef({ onFound: props.onFound, arrowFor: props.arrowFor })
+  const handlers = useRef({ onFound: props.onFound, onRefine: props.onRefine, arrowFor: props.arrowFor })
   useEffect(() => {
-    handlers.current = { onFound: props.onFound, arrowFor: props.arrowFor }
+    handlers.current = { onFound: props.onFound, onRefine: props.onRefine, arrowFor: props.arrowFor }
   })
 
-  useEffect(() => {
-    if (camera !== 'ready') return
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    let timer = 0
-    let stopped = false
-    let tracked: string | null = null // いま追いかけているQR
-    let seenAt = 0
-    let lost = false
+  // QRの追いかけ（いま追いかけているQR・最後に見えた時刻・見失ったか）
+  const track = useRef<{ cp: string | null; seenAt: number; lost: boolean }>({ cp: null, seenAt: 0, lost: false })
+  const [focal, setFocal] = useState<number | null>(null)
 
-    const scan = () => {
-      const video = videoRef.current
-      if (stopped || !video || !ctx) return
-      if (video.videoWidth > 0) {
-        // 処理を軽くするため、横640ピクセルまで縮めて読む
-        const down = Math.min(1, 640 / video.videoWidth)
-        canvas.width = Math.round(video.videoWidth * down)
-        canvas.height = Math.round(video.videoHeight * down)
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
-        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' })
-        const cp = code ? checkpointFromQr(code.data) : null
-        const now = Date.now()
-        if (code) setWrongQr(!cp)
+  useQrScanner(videoRef, camera, ({ cp, other, quad, focal: f, now }) => {
+    const t = track.current
+    if (f && f !== focal) setFocal(f)
+    if (other) setWrongQr(true)
+    else if (cp) setWrongQr(false)
 
-        if (code && cp) {
-          // 映像の座標（縮めた分を戻す）→ 画面の座標（object-fit: cover の拡大・切り取りを考える）
-          const r = video.getBoundingClientRect()
-          const s = Math.max(r.width / video.videoWidth, r.height / video.videoHeight)
-          const ox = (r.width - video.videoWidth * s) / 2
-          const oy = (r.height - video.videoHeight * s) / 2
-          const toScreen = (p: { x: number; y: number }): Point => ({ x: (p.x / down) * s + ox, y: (p.y / down) * s + oy })
-          const l = code.location
-          const quad: Quad = [
-            toScreen(l.topLeftCorner),
-            toScreen(l.topRightCorner),
-            toScreen(l.bottomRightCorner),
-            toScreen(l.bottomLeftCorner),
-          ]
-          // 新しいQR、または同じQRをしばらくぶりに正面から映した → 現在地と向きを合わせる
-          const again = cp === tracked && lost && now - seenAt > REANCHOR_MS && isFrontal(quad)
-          if (cp !== tracked || again) {
-            const jumped = handlers.current.onFound(cp)
-            if (jumped !== null) {
-              tracked = cp
-              navigator.vibrate?.(60)
-              const angle = handlers.current.arrowFor(cp)
-              setMarker({ cp, angle, step: jumped, quad, lost: false })
-            }
-          }
-          if (cp === tracked) {
-            seenAt = now
-            lost = false
-            setMarker((m) => (m ? { ...m, quad, lost: false } : m))
-          }
-        } else if (tracked && !lost && now - seenAt > LOST_MS) {
-          lost = true
-          setMarker((m) => (m ? { ...m, lost: true } : m))
+    if (cp && quad) {
+      const yaw = f ? wallYaw(quad, f) : null
+      // 新しいQR、または同じQRをしばらくぶりに正面から映した → 現在地と向きを合わせる
+      const again = cp === t.cp && t.lost && now - t.seenAt > REANCHOR_MS && isFrontal(quad)
+      if (cp !== t.cp || again) {
+        const jumped = handlers.current.onFound(cp, yaw)
+        if (jumped !== null) {
+          track.current = { cp, seenAt: now, lost: false }
+          navigator.vibrate?.(60)
+          setMarker({ cp, angle: handlers.current.arrowFor(cp), step: jumped, quad, lost: false })
+          return true
         }
       }
-      // QRを追いかけている間は、なめらかに動かすため少し速く読む
-      timer = window.setTimeout(scan, tracked && !lost ? 60 : 150)
+      if (cp === t.cp) {
+        // 映っている間は、斜めに映った分を見積もって、向きの基準を少しずつ正確にする
+        handlers.current.onRefine(cp, yaw)
+        track.current = { cp, seenAt: now, lost: false }
+        setMarker((m) => (m ? { ...m, quad, lost: false } : m))
+        return true
+      }
+    } else if (t.cp && !t.lost && now - t.seenAt > LOST_MS) {
+      track.current = { ...t, lost: true }
+      setMarker((m) => (m ? { ...m, lost: true } : m))
     }
-    scan()
-    return () => {
-      stopped = true
-      clearTimeout(timer)
-    }
-  }, [camera])
+    return false
+  })
 
   const message = cameraMessage(camera)
   const hasHeading = confidence !== 'none' && userHeading !== null && targetBearing !== null
@@ -135,12 +104,18 @@ export default function CameraOverlay(props: Props) {
   const mode: 'wall' | 'floor' | 'none' = message ? 'none' : wall && (!wall.lost || !hasHeading) ? 'wall' : hasHeading ? 'floor' : 'none'
   const rotation = hasHeading ? arrowRotation(userHeading, targetBearing) : 0
 
-  // 地面の印: 次に目指す地点のおおよその位置に置く。向きが分かっていて（床の矢印のとき）、画面に入るときだけ
+  // 次に目指す地点の印（向きが分かっている＝床の矢印のときだけ）
+  //   近い（6m以内）… 床の上のおおよその位置に輪を置く
+  //   遠い … 距離の見積もりを使わず、地平線の高さに「方向の札」を立てる（手前・奥にずれないように）
+  const W = window.innerWidth
+  const H = window.innerHeight
+  const relative = userHeading !== null && target ? angleDiff(userHeading, target.bearing) : 0
+  const showTarget = mode === 'floor' && userHeading !== null && target !== null && elevation !== null && target.distance <= 80
   const ground =
-    mode === 'floor' && userHeading !== null && target && elevation !== null && target.distance <= 60
-      ? projectGround(angleDiff(userHeading, target.bearing), target.distance, elevation, window.innerWidth, window.innerHeight)
-      : null
+    showTarget && target.distance <= GROUND_NEAR_M ? projectGround(relative, target.distance, elevation, W, H, focal ?? undefined) : null
+  const sign = showTarget && !ground ? directionMarker(relative, elevation, W, H, focal ?? undefined) : null
   const ringR = ground ? Math.min(90, Math.max(16, ground.scale * 0.7)) : 0 // 半径 0.7m の輪
+  const distanceText = target ? `約${Math.max(1, Math.round(target.distance))}m` : ''
 
   let status = 'QRコードを映すと矢印が出ます'
   let statusClass = ''
@@ -211,13 +186,35 @@ export default function CameraOverlay(props: Props) {
           <span className="v-ground-pin" />
           <span className="v-ground-label">
             {targetName}
-            <small>このあたり・約{Math.max(1, Math.round(target!.distance))}m</small>
+            <small>このあたり・{distanceText}</small>
           </span>
         </div>
       )}
 
-      {/* 地面の印が画面に入っている間は、それが進む先を示すので矢印は出さない（重なって読めなくなるため） */}
-      {mode === 'floor' && !ground && (
+      {sign && !sign.side && (
+        <div className={`v-sign ${confidence === 'low' ? 'low' : ''}`} style={{ left: sign.x, top: sign.y }} aria-hidden>
+          {/* 遠い目標: その方向の地平線の上に立てた札。下の棒の先が目標の方向 */}
+          <span className="v-sign-label">
+            {targetName}
+            <small>この方向・{distanceText}</small>
+          </span>
+          <span className="v-sign-pole" />
+        </div>
+      )}
+
+      {sign?.side && (
+        <div className={`v-sign-edge ${sign.side}`} style={{ top: sign.y }} aria-hidden>
+          {sign.side === 'left' ? '‹' : ''}
+          <span>
+            {targetName}は{sign.side === 'left' ? '左' : '右'}
+            <small>{distanceText}</small>
+          </span>
+          {sign.side === 'right' ? '›' : ''}
+        </div>
+      )}
+
+      {/* 目標の印が画面に入っている間は、それが進む先を示すので矢印は出さない（重なって読めなくなるため） */}
+      {mode === 'floor' && !ground && !(sign && !sign.side) && (
         <div className={`v-ar-arrow ${confidence === 'low' ? 'low' : ''}`} aria-hidden>
           {/* 画面の上 = 利用者の正面。進む方向へ回してから、床に寝かせる */}
           <div style={{ transform: `perspective(700px) rotateX(58deg) rotate(${rotation}deg)` }}>

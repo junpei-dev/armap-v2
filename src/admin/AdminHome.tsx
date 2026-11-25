@@ -4,6 +4,7 @@ import type { AdminData, Issue } from '../types.ts'
 import { AdminContext, type AdminContextValue } from './AdminContext.tsx'
 import './admin.css'
 import BuildingsEditor from './BuildingsEditor.tsx'
+import CalibratePage from './CalibratePage.tsx'
 import CheckpointsEditor from './CheckpointsEditor.tsx'
 import HistoryPage from './HistoryPage.tsx'
 import MapEditor from './MapEditor.tsx'
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'rooms', label: '部屋' },
   { id: 'buildings', label: '棟の名前' },
   { id: 'checkpoints', label: 'チェックポイント' },
+  { id: 'calibrate', label: '現地調整' },
   { id: 'preview', label: '経路の確認' },
   { id: 'history', label: '変更履歴' },
 ] as const
@@ -165,6 +167,7 @@ export default function AdminHome() {
             {tab === 'rooms' && <RoomsEditor />}
             {tab === 'buildings' && <BuildingsEditor />}
             {tab === 'checkpoints' && <CheckpointsEditor />}
+            {tab === 'calibrate' && <CalibratePage />}
             {tab === 'preview' && <RoutePreview />}
             {tab === 'history' && <HistoryPage />}
           </main>

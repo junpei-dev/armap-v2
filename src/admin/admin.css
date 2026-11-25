@@ -618,3 +618,124 @@ ul.issues li.issue-fatal {
 .split > * {
   min-width: 0;
 }
+
+/* ---- 現地調整（スマートフォンで使う） ---- */
+.calib {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.calib-intro {
+  max-width: 560px;
+  margin: 0 auto;
+}
+.calib-intro ol {
+  padding-left: 22px;
+}
+.calib-camera {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  max-height: 62vh;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+.calib-camera video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.calib-frame {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 55%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 3px dashed rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+}
+.calib-aim {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  bottom: 8%;
+  width: 0;
+  border-left: 3px solid #ffd43b;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+}
+.calib-status,
+.calib-message {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 14px;
+}
+.calib-status b {
+  color: #ffd43b;
+}
+.calib-message {
+  top: 40%;
+  bottom: auto;
+  text-align: center;
+}
+.calib-stop {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+.calib-neighbors {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.calib-neighbors button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-line);
+  background: #fff;
+  font-size: 16px;
+}
+.calib-neighbors button.on {
+  border: 2px solid var(--color-main);
+  background: var(--color-tint);
+  font-weight: bold;
+}
+.calib-neighbors small {
+  color: var(--color-sub);
+  font-weight: normal;
+  white-space: nowrap;
+}
+.calib-result {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--color-tint);
+}
+.calib-result p {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+.calib-result.warn {
+  background: var(--error-tint);
+}
