@@ -5,6 +5,7 @@ import { cssMatrix3d } from '../core/homography.ts'
 import type { Step } from '../core/route.ts'
 import type { Progress } from '../core/steps.ts'
 import { cameraMessage, useCamera } from '../hooks/useCamera.ts'
+import { useFollow } from '../hooks/useFollow.ts'
 import { type Quad, useQrScanner } from '../hooks/useQrScanner.ts'
 
 // ④ カメラ案内（AR・要件 F-30〜F-34・F-40〜F-43、設計書 8.1・8.2）
@@ -115,6 +116,9 @@ export default function CameraOverlay(props: Props) {
     showTarget && target.distance <= GROUND_NEAR_M ? projectGround(relative, target.distance, elevation, W, H, focal ?? undefined) : null
   const sign = showTarget && !ground ? directionMarker(relative, elevation, W, H, focal ?? undefined) : null
   const ringR = ground ? Math.min(90, Math.max(16, ground.scale * 0.7)) : 0 // 半径 0.7m の輪
+  // 印は目標の位置をなめらかに追いかける（センサーの細かな揺れでガタつかないように）
+  const groundRef = useFollow(ground)
+  const signRef = useFollow(sign && !sign.side ? sign : null)
   const distanceText = target ? `約${Math.max(1, Math.round(target.distance))}m` : ''
 
   // 画面の下に出す1行（いま一番知りたいこと）。カメラの景色を隠さないよう、文字は最小限にする
@@ -172,7 +176,7 @@ export default function CameraOverlay(props: Props) {
       )}
 
       {ground && (
-        <div className={`v-ground ${confidence === 'low' ? 'low' : ''}`} style={{ left: ground.x, top: ground.y }} aria-hidden>
+        <div ref={groundRef} className={`v-ground ${confidence === 'low' ? 'low' : ''}`} aria-hidden>
           {/* 地面に寝かせた輪（遠いほど小さい）と、その上に立てた札 */}
           <span className="v-ground-ring" style={{ width: ringR * 2, height: ringR * 0.7 }} />
           <span className="v-ground-pin" />
@@ -181,7 +185,7 @@ export default function CameraOverlay(props: Props) {
       )}
 
       {sign && !sign.side && (
-        <div className={`v-sign ${confidence === 'low' ? 'low' : ''}`} style={{ left: sign.x, top: sign.y }} aria-hidden>
+        <div ref={signRef} className={`v-sign ${confidence === 'low' ? 'low' : ''}`} aria-hidden>
           {/* 遠い目標: その方向の地平線の上に立てた札。下の棒の先が目標の方向 */}
           <span className="v-sign-label">
             {targetName}

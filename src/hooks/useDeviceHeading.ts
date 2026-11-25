@@ -65,21 +65,34 @@ export function useDeviceHeading(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return
-    const recent: number[] = []
+    // 手ぶれで細かく揺れるので、指数的な移動平均でなめらかにする
+    //   向き: 単位ベクトル（sin, cos）で平均（359度と1度をまたいでも正しく平均できる）
+    //   上下の傾き: 印の上下の位置に大きく効くので、向きより強めにならす
+    let sx: number | null = null
+    let cy = 0
+    let elev: number | null = null
     let lastUpdate = 0
     const onOrientation = (e: DeviceOrientationEvent) => {
       if (e.alpha === null || e.beta === null || e.gamma === null) return
       const h = deviceHeading(e.alpha, e.beta, e.gamma)
       if (h === null) return
-      recent.push(h)
-      if (recent.length > 5) recent.shift()
-      const avg = averageAngles(recent)
+      const r = (h * Math.PI) / 180
+      if (sx === null) {
+        sx = Math.sin(r)
+        cy = Math.cos(r)
+      } else {
+        sx += (Math.sin(r) - sx) * 0.25
+        cy += (Math.cos(r) - cy) * 0.25
+      }
+      const avg = averageAngles([(Math.atan2(sx, cy) * 180) / Math.PI]) ?? h
+      const el = cameraElevation(e.beta, e.gamma)
+      elev = elev === null ? el : elev + (el - elev) * 0.12
       headingRef.current = avg
       const now = performance.now()
-      if (now - lastUpdate > 100) {
+      if (now - lastUpdate > 60) {
         lastUpdate = now
         setHeading(avg)
-        setElevation(cameraElevation(e.beta, e.gamma))
+        setElevation(elev)
         setWorking(true)
       }
     }

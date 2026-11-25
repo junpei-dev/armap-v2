@@ -1082,3 +1082,16 @@
 .v-scan-hint {
   font-size: 15px;
 }
+
+/* 印の位置は useFollow が transform で動かす（left/top の切り替えではガタつくため） */
+.v-ground,
+.v-sign {
+  left: 0;
+  top: 0;
+  transition: opacity 0.3s;
+  will-change: transform;
+}
+/* 床の矢印の回転も、少しゆっくり追いかける */
+.v-ar-arrow > div {
+  transition: transform 0.25s ease-out;
+}
