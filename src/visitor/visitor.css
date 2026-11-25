@@ -988,3 +988,97 @@
     opacity: 0.75;
   }
 }
+
+/* ---- カメラ案内の簡略版（2026-11-25: 景色が見えるよう、上下の表示を小さくまとめた） ---- */
+.v-ar-top {
+  align-items: flex-start;
+}
+.v-ar-back {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 30px;
+  line-height: 40px;
+  padding: 0;
+}
+.v-ar-mini {
+  width: 104px;
+  border-radius: 12px;
+  opacity: 0.92;
+}
+.v-ar-mini-label {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+.v-ar-arrow {
+  top: auto;
+  bottom: calc(150px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+}
+.v-ar-panel {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  gap: 8px;
+}
+.v-ar-line {
+  margin: 0;
+  font-size: 17px;
+  font-weight: bold;
+  line-height: 1.4;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.v-ar-line.near {
+  color: #ffc078;
+  font-size: 19px;
+}
+.v-ar-panel .v-ar-buttons .v-primary {
+  min-height: 50px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.v-ar-count {
+  font-size: 12px;
+  font-weight: normal;
+  opacity: 0.8;
+}
+.v-ar-prev {
+  flex: 0 0 72px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 15px;
+  font-weight: bold;
+}
+.v-ar-prev:disabled {
+  opacity: 0.35;
+}
+.v-ground-label,
+.v-sign-label {
+  font-size: 14px;
+  padding: 3px 10px;
+}
+.v-sign-edge {
+  padding: 14px 10px;
+  font-size: 34px;
+}
+.v-scan-hint {
+  font-size: 15px;
+}

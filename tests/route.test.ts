@@ -223,3 +223,19 @@ describe('stepForNode・stepBearing', () => {
     expect(stepBearing(route.steps[1])).toBeCloseTo(0)
   })
 })
+
+describe('おすすめの掲示面の向き', () => {
+  it('来た方（ひとつ手前の地点）へ向ける。出発点は null', async () => {
+    const { suggestFacing } = await import('../src/core/route.ts')
+    const n = (id: string, x: number, y: number) => ({ id, kind: 'corridor' as const, floor: 1, pos: { x, y } })
+    const nodes = [n('A', 0, 0), n('B', 10, 0), n('C', 10, 10)]
+    const edges = [
+      { id: 1, from: 'A', to: 'B', kind: 'walk' as const },
+      { id: 2, from: 'B', to: 'C', kind: 'walk' as const },
+    ]
+    // C には B（上）から来るので、QRは上（0度）へ向ける。B には A（左）から来るので 270度
+    expect(suggestFacing(nodes as never, edges as never, 'A', 'C')).toBe(0)
+    expect(suggestFacing(nodes as never, edges as never, 'A', 'B')).toBe(270)
+    expect(suggestFacing(nodes as never, edges as never, 'A', 'A')).toBeNull()
+  })
+})

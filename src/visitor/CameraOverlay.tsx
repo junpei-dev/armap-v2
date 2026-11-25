@@ -117,31 +117,23 @@ export default function CameraOverlay(props: Props) {
   const ringR = ground ? Math.min(90, Math.max(16, ground.scale * 0.7)) : 0 // 半径 0.7m の輪
   const distanceText = target ? `約${Math.max(1, Math.round(target.distance))}m` : ''
 
-  let status = 'QRコードを映すと矢印が出ます'
-  let statusClass = ''
-  if (mode === 'wall' && wall) {
-    status = wall.lost ? 'QRコードを映すと矢印が動きます' : 'QRコードで向きを合わせました'
-    statusClass = wall.lost ? '' : 'ok'
-  } else if (mode === 'floor') {
-    status = confidence === 'low' ? '矢印がずれているかもしれません' : '矢印の方向へ進みます'
-    statusClass = confidence === 'low' ? 'warn' : 'ok'
-  }
+  // 画面の下に出す1行（いま一番知りたいこと）。カメラの景色を隠さないよう、文字は最小限にする
+  let line = step.text
+  if (mode === 'wall' && wall && wall.angle !== null) line = directionText(wall.angle)
+  else if (progress) line = progress.near ? progress.text : `${targetName}まで ${progress.text.replace('あと ', 'あと')}`
 
   return (
     <div className="v-overlay" role="dialog" aria-label="カメラ案内">
       <video ref={videoRef} className="v-camera-video" playsInline muted />
 
       <div className="v-ar-top">
-        <div className="v-ar-left">
-          <button type="button" className="v-chip" onClick={onClose}>
-            ‹ 地図に戻る
-          </button>
-          {!message && <span className={`v-chip v-chip-status ${statusClass}`}>{status}</span>}
-        </div>
+        <button type="button" className="v-ar-back" onClick={onClose} aria-label="地図に戻る">
+          ‹
+        </button>
         {/* 次に目指す地点を、小さな地図で示す（輪の印が次の地点・青い丸が自分） */}
         <div className="v-ar-mini">
           {mini}
-          <span className="v-ar-mini-label">次: {targetName}</span>
+          <span className="v-ar-mini-label">{targetName}</span>
         </div>
       </div>
 
@@ -151,8 +143,8 @@ export default function CameraOverlay(props: Props) {
         <>
           <div className="v-scan-frame" aria-hidden />
           <p className="v-scan-hint">
-            {wrongQr ? 'この校内案内のQRコードではありません' : '近くの「校内案内」のQRコードを映してください'}
-            <small>矢印で進む方向を示します。読まなくても「次へ」で進めます</small>
+            {wrongQr ? 'この校内案内のQRコードではありません' : 'QRコードを映すと矢印が出ます'}
+            <small>読まなくても「次へ」で進めます</small>
           </p>
         </>
       )}
@@ -184,10 +176,7 @@ export default function CameraOverlay(props: Props) {
           {/* 地面に寝かせた輪（遠いほど小さい）と、その上に立てた札 */}
           <span className="v-ground-ring" style={{ width: ringR * 2, height: ringR * 0.7 }} />
           <span className="v-ground-pin" />
-          <span className="v-ground-label">
-            {targetName}
-            <small>このあたり・{distanceText}</small>
-          </span>
+          <span className="v-ground-label">{targetName}</span>
         </div>
       )}
 
@@ -196,7 +185,7 @@ export default function CameraOverlay(props: Props) {
           {/* 遠い目標: その方向の地平線の上に立てた札。下の棒の先が目標の方向 */}
           <span className="v-sign-label">
             {targetName}
-            <small>この方向・{distanceText}</small>
+            <small>{distanceText}</small>
           </span>
           <span className="v-sign-pole" />
         </div>
@@ -204,26 +193,21 @@ export default function CameraOverlay(props: Props) {
 
       {sign?.side && (
         <div className={`v-sign-edge ${sign.side}`} style={{ top: sign.y }} aria-hidden>
-          {sign.side === 'left' ? '‹' : ''}
-          <span>
-            {targetName}は{sign.side === 'left' ? '左' : '右'}
-            <small>{distanceText}</small>
-          </span>
-          {sign.side === 'right' ? '›' : ''}
+          {sign.side === 'left' ? '‹' : '›'}
         </div>
       )}
 
-      {/* 目標の印が画面に入っている間は、それが進む先を示すので矢印は出さない（重なって読めなくなるため） */}
-      {mode === 'floor' && !ground && !(sign && !sign.side) && (
+      {/* 床の矢印: 向きが分かっている間はいつも出す（印が出ていても、進む方向をすぐ分かるように） */}
+      {mode === 'floor' && (
         <div className={`v-ar-arrow ${confidence === 'low' ? 'low' : ''}`} aria-hidden>
           {/* 画面の上 = 利用者の正面。進む方向へ回してから、床に寝かせる */}
           <div style={{ transform: `perspective(700px) rotateX(58deg) rotate(${rotation}deg)` }}>
-            <svg viewBox="-50 -60 100 120" width="150" height="180">
+            <svg viewBox="-50 -60 100 120" width="110" height="132">
               <path
                 d="M0 -55 L42 -8 L16 -8 L16 55 L-16 55 L-16 -8 L-42 -8 Z"
                 fill="var(--me, #1c7ed6)"
                 stroke="#fff"
-                strokeWidth="4"
+                strokeWidth="5"
                 strokeLinejoin="round"
               />
             </svg>
@@ -231,31 +215,21 @@ export default function CameraOverlay(props: Props) {
         </div>
       )}
 
-      <div className="v-overlay-bottom">
-        {mode === 'wall' && wall && wall.angle !== null && <p className="v-overlay-dir">{directionText(wall.angle)}</p>}
-        {mode === 'floor' && confidence === 'low' && (
-          <p className="v-overlay-sub">近くのQRコードを映すと、矢印が正確になります</p>
-        )}
-        {progress && (
-          <p className={`v-overlay-progress ${progress.near ? 'near' : ''}`} role="status">
-            {progress.text}
-          </p>
-        )}
-        <div className="v-overlay-step">
-          <span className="v-overlay-count">
-            {stepIndex + 1} / {stepCount}
-          </span>
-          <p className="v-overlay-text">{step.text}</p>
-        </div>
+      <div className="v-ar-panel">
+        <p className={`v-ar-line ${progress?.near ? 'near' : ''}`} role="status">
+          {line}
+        </p>
         <div className="v-ar-buttons">
-          <button type="button" className="v-secondary" onClick={onPrev} disabled={stepIndex === 0}>
+          <button type="button" className="v-ar-prev" onClick={onPrev} disabled={stepIndex === 0} aria-label="前の案内に戻る">
             戻る
           </button>
           <button type="button" className={`v-primary ${progress?.near ? 'v-pulse' : ''}`} onClick={onNext}>
             {isLast ? '着いた' : '次へ'}
+            <small className="v-ar-count">
+              {stepIndex + 1}/{stepCount}
+            </small>
           </button>
         </div>
-        <p className="v-overlay-sub">立ち止まって確認してください</p>
       </div>
     </div>
   )

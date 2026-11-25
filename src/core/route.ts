@@ -332,3 +332,21 @@ export function stepBearing(step: Step): number | null {
   }
   return null
 }
+
+/**
+ * QRを貼るときの、おすすめの掲示面の向き（管理コンソール・チェックポイント）
+ * 「事務室（出発点）の方から歩いてきた人の正面に見える向き」= この地点から、ひとつ手前の地点（来た方）への向き
+ * 階段の上下など同じ位置の点は飛ばす。出発点そのもの・道がつながっていない地点は null
+ */
+export function suggestFacing(nodes: PlacedNode[], edges: Edge[], start: string, nodeId: string): number | null {
+  if (start === nodeId) return null
+  const ids = findPath(nodes, edges, start, nodeId)
+  if (!ids || ids.length < 2) return null
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const here = byId.get(nodeId)!
+  for (let i = ids.length - 2; i >= 0; i--) {
+    const prev = byId.get(ids[i])!
+    if (distance(prev.pos, here.pos) >= 0.5) return Math.round(planAngle(here.pos, prev.pos))
+  }
+  return null
+}

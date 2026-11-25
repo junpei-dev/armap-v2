@@ -739,3 +739,53 @@ ul.issues li.issue-fatal {
 .calib-result.warn {
   background: var(--error-tint);
 }
+
+/* ---- 掲示用のQRシート（印刷するときだけ出す） ---- */
+.qr-print {
+  display: none;
+}
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 18mm;
+  }
+  body > *:not(.qr-print) {
+    display: none !important;
+  }
+  .qr-print {
+    display: grid;
+    justify-items: center;
+    gap: 4mm;
+    text-align: center;
+    color: #000;
+    font-family: 'BIZ UDPGothic', 'Hiragino Sans', sans-serif;
+  }
+  .qr-print-school {
+    font-size: 14pt;
+    color: #555;
+  }
+  .qr-print-title {
+    font-size: 40pt;
+    font-weight: bold;
+    color: #1f6b3a;
+    letter-spacing: 0.1em;
+  }
+  .qr-print img {
+    width: 140mm;
+    height: 140mm;
+    image-rendering: pixelated;
+  }
+  .qr-print-lead {
+    font-size: 20pt;
+    font-weight: bold;
+  }
+  .qr-print-sub {
+    font-size: 14pt;
+    color: #444;
+  }
+  .qr-print-id {
+    margin-top: 8mm;
+    font-size: 9pt;
+    color: #888;
+  }
+}
