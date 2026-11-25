@@ -1,6 +1,7 @@
 import CampusMap from '../components/CampusMap.tsx'
 import Icon from '../components/Icon.tsx'
 import RouteLayer from '../components/RouteLayer.tsx'
+import { roomPlace } from '../core/campus.ts'
 import { minutesText, type Route, roundDistance, routeHighlights } from '../core/route.ts'
 import type { CampusData, Room } from '../types.ts'
 
@@ -50,7 +51,13 @@ export default function OverviewScreen({ data, room, route, originLabel, onBack,
         <div className="v-label">目的地</div>
         <h1 className="v-dest">{room.name}</h1>
         <p className="v-dest-place">
-          {building?.name ?? `${room.building}棟`}・<strong>{room.floor}階</strong>
+          {building ? (
+            <>
+              {building.name}・<strong>{room.floor}階</strong>
+            </>
+          ) : (
+            roomPlace(room, data.buildings)
+          )}
         </p>
         <p className="v-dest-meta">
           <span className="v-pill">

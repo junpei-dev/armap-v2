@@ -1,4 +1,4 @@
-import type { Building, BuildingPlacement, CampusRaw, Edge, GraphNode, PlacedNode, Point } from '../types.ts'
+import type { Building, BuildingPlacement, CampusRaw, Edge, GraphNode, PlacedNode, Point, Room } from '../types.ts'
 import { distanceToSegment, globalToLocal, localToGlobal, pointInPolygon } from './geometry.ts'
 
 // 校地のデータを扱う共通の関数（ノードの位置・つながり）
@@ -192,4 +192,44 @@ export function buildingMismatches(raw: Pick<CampusRaw, 'nodes' | 'buildings'>):
     if ((suggested?.id ?? undefined) !== (n.building ?? undefined)) out.push({ node: n, pos, suggested })
   }
   return out
+}
+
+/** QRのある場所から作った目的地の部屋IDにつける印（本物の部屋と区別する） */
+export const CP_ROOM_PREFIX = 'cp:'
+
+/**
+ * QRを貼った場所（チェックポイント）も、目的地として選べるようにする（来校者の画面だけ）
+ * ・事務室（CP01）は「事務室（受付）」。別のQRから開いた人が事務室へ戻れるように
+ * ・生徒指導部・体育館など、部屋として登録していない場所も選べるように
+ * ・同じノードに本物の部屋があるとき（進路指導室など）は、本物の部屋を使うので作らない
+ */
+export function withCheckpointRooms<T extends Pick<CampusRaw, 'rooms' | 'checkpoints' | 'nodes'>>(raw: T): T {
+  const roomNodes = new Set(raw.rooms.map((r) => r.node))
+  const extra: Room[] = []
+  for (const c of raw.checkpoints) {
+    if (roomNodes.has(c.node)) continue
+    const node = raw.nodes.find((n) => n.id === c.node)
+    if (!node) continue
+    const name = c.id === START_CHECKPOINT_ID ? '事務室（受付）' : (node.landmark ?? c.place.replace(/(の前|前)$/, '')).trim()
+    extra.push({
+      id: CP_ROOM_PREFIX + c.id,
+      name,
+      drawingName: name,
+      aliases: c.id === START_CHECKPOINT_ID ? ['事務室', '受付', '事務'] : [c.place],
+      building: node.building ?? '',
+      floor: node.floor,
+      node: c.node,
+      category: 'admin',
+      visible: true,
+    })
+    roomNodes.add(c.node)
+  }
+  return { ...raw, rooms: [...raw.rooms, ...extra] }
+}
+
+/** 部屋の場所の言い方（例:「管理・教室棟・1階」。屋外なら「屋外」） */
+export function roomPlace(room: Pick<Room, 'building' | 'floor'>, buildings: Pick<Building, 'id' | 'name'>[]): string {
+  if (!room.building) return '屋外'
+  const b = buildings.find((x) => x.id === room.building)
+  return `${b?.name ?? `${room.building}棟`}・${room.floor}階`
 }

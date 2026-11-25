@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { fetchCampusData } from '../api/visitor.ts'
-import { placeNodes, START_CHECKPOINT_ID } from '../core/campus.ts'
+import { placeNodes, START_CHECKPOINT_ID, withCheckpointRooms } from '../core/campus.ts'
 import { angleDiff, normalizeAngle, planAngle } from '../core/geometry.ts'
 import { anchorOffset, averageAngles, confidence, planHeading } from '../core/heading.ts'
 import { planRoute, startHint, stepBearing, stepForNode } from '../core/route.ts'
-import { STRIDE_M, stepProgress, stepTargetName, walkedPath } from '../core/steps.ts'
+import { pathLength, STRIDE_M, stepProgress, stepTargetName, walkedPath } from '../core/steps.ts'
 import CampusMap from '../components/CampusMap.tsx'
 import RouteLayer from '../components/RouteLayer.tsx'
 import {
@@ -47,7 +47,7 @@ export default function VisitorHome() {
   const walked = stepsWorking && walkBase.key === walkKey ? Math.max(0, steps - walkBase.steps) * STRIDE_M : stepsWorking ? 0 : null
 
   useEffect(() => {
-    fetchCampusData().then(setData, (e: Error) => setError(e.message))
+    fetchCampusData().then((d) => setData(withCheckpointRooms(d)), (e: Error) => setError(e.message))
   }, [])
 
   // 状態が変わるたびに保存。QR の ?cp=… は一度読んだら URL から消す（再読み込みで目的地が消えないように）
@@ -156,16 +156,29 @@ export default function VisitorHome() {
   // いまの区間と、その中での進み具合（歩数計が使えるときだけ）
   const stepIndex = route ? Math.min(state.step, route.steps.length - 1) : 0
   const current = route?.steps[stepIndex] ?? null
-  const progress = current && walked !== null ? stepProgress(current, walked, room?.name) : null
+  // 階段の区間（例:「階段まで 約5m 進み、階段で1階へ下ります」）は2つに分けて扱う
+  //   階段の入口まで … いまの階を歩く部分。ふつうの区間と同じく矢印・印・「あと○m」を出す
+  //   階段に着いたあと … 上り下りの途中は向きも歩数も当てにならないので「階段で○階へ」の札だけ
+  const flat = useMemo(() => (current ? sameFloorPart(current.nodes) : []), [current])
+  const approach = pathLength(flat.map((n) => n.pos)) // 階段の入口までの距離（m）
+  const onStairs = current?.action.type === 'stairs'
+  const atStairs = onStairs && (approach < 2 || (walked !== null && walked >= approach - 1))
+  const progress =
+    !current || walked === null || atStairs
+      ? null
+      : stepProgress(onStairs ? { ...current, distance: approach } : current, walked, room?.name)
   const near = progress?.near ?? false
   // 次に目指す地点が、いまの位置（見積もり）から見てどの方向・どれだけ先か（カメラの地面の印に使う）
   const target = useMemo(() => {
-    if (!current) return null
-    const pts = current.nodes.map((n) => n.pos)
-    const me = walkedPath(pts, walked ?? 0).at(-1) ?? current.from.pos
-    const distance = Math.hypot(current.to.pos.x - me.x, current.to.pos.y - me.y)
-    return distance < 1.5 ? null : { bearing: planAngle(me, current.to.pos), distance }
-  }, [current, walked])
+    // 階段の区間の行き先は別の階にある。いまの階の床に印を置くと見当違いになるので、
+    // 目標は「階段の入口」にする。階段に着いたら印は出さない
+    if (!current || atStairs) return null
+    const nodes = onStairs ? flat : current.nodes
+    const goal = nodes.at(-1)!.pos
+    const me = walkedPath(nodes.map((n) => n.pos), walked ?? 0).at(-1) ?? current.from.pos
+    const distance = Math.hypot(goal.x - me.x, goal.y - me.y)
+    return distance < 1.5 ? null : { bearing: planAngle(me, goal), distance }
+  }, [current, walked, atStairs, onStairs, flat])
   // 区間の終わりに近づいたら、1回だけ震えて知らせる
   useEffect(() => {
     if (near) navigator.vibrate?.([80, 60, 80])
@@ -251,7 +264,8 @@ export default function VisitorHome() {
           stepIndex={stepIndex}
           stepCount={route.steps.length}
           targetBearing={stepBearing(current)}
-          targetName={stepTargetName(current, room.name)}
+          targetName={onStairs ? '階段' : stepTargetName(current, room.name)}
+          atStairs={atStairs}
           target={target}
           elevation={elevation}
           progress={progress}
@@ -289,6 +303,16 @@ export default function VisitorHome() {
       )}
     </div>
   )
+}
+
+/** 区間の点のうち、出発した階のままの部分（階段の入口まで） */
+function sameFloorPart<T extends { floor: number }>(nodes: T[]): T[] {
+  const out: T[] = []
+  for (const n of nodes) {
+    if (out.length > 0 && n.floor !== out[0].floor) break
+    out.push(n)
+  }
+  return out
 }
 
 function Message({ title, children }: { title: string; children?: React.ReactNode }) {

@@ -28,6 +28,7 @@ type Props = {
   userHeading: number | null // 利用者の向き（図面角度）。基準合わせ前は null
   confidence: Confidence
   isLast: boolean
+  atStairs: boolean // 階段の区間で、階段の入口まで来た（上り下りの途中）
   /**
    * QRを見つけた。現在地と向きを合わせ、移った先の区間の番号を返す（登録の無いQRなら null）
    * yaw: QRを斜めから映している分の見積もり（度・wallYaw）。QRが小さく映っているときは null
@@ -98,11 +99,15 @@ export default function CameraOverlay(props: Props) {
   })
 
   const message = cameraMessage(camera)
+  // 階段の区間: 上り下りの途中は向きの矢印が当てにならない（踊り場で何度も折り返す）ので、
+  // 床の矢印の代わりに「階段で○階へ」の札を大きく出す。上りきったら利用者が「次へ」を押す
+  const stairs = props.atStairs && step.action.type === 'stairs' ? step.action : null
   const hasHeading = confidence !== 'none' && userHeading !== null && targetBearing !== null
   // 壁の矢印は「QRを読んだ区間」にいる間だけ。「次へ」で先へ進んだら、もうその向きではない
   const wall = marker && marker.angle !== null && marker.step === stepIndex ? marker : null
   // どの矢印を出すか: QRが映っている間は壁の矢印。目を離したら床の矢印（センサーが使えないときは壁の矢印を薄く残す）
-  const mode: 'wall' | 'floor' | 'none' = message ? 'none' : wall && (!wall.lost || !hasHeading) ? 'wall' : hasHeading ? 'floor' : 'none'
+  const mode: 'wall' | 'floor' | 'none' =
+    message ? 'none' : wall && (!wall.lost || !hasHeading) ? 'wall' : hasHeading && !stairs ? 'floor' : 'none'
   const rotation = hasHeading ? arrowRotation(userHeading, targetBearing) : 0
 
   // 次に目指す地点の印（向きが分かっている＝床の矢印のときだけ）
@@ -143,7 +148,19 @@ export default function CameraOverlay(props: Props) {
 
       {message && <p className="v-ar-center">{message}</p>}
 
-      {!message && camera === 'ready' && mode === 'none' && (
+      {!message && camera === 'ready' && mode === 'none' && stairs && (
+        <div className="v-ar-stairs" role="status">
+          <span className="v-ar-stairs-mark" aria-hidden>
+            {stairs.up ? '↑' : '↓'}
+          </span>
+          <strong>
+            階段で{stairs.toFloor}階へ{stairs.up ? '上ります' : '下ります'}
+          </strong>
+          <small>{stairs.toFloor}階に着いたら「次へ」を押してください</small>
+        </div>
+      )}
+
+      {!message && camera === 'ready' && mode === 'none' && !stairs && (
         <>
           <div className="v-scan-frame" aria-hidden />
           <p className="v-scan-hint">

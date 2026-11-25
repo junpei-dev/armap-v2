@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Icon from '../components/Icon.tsx'
+import { CP_ROOM_PREFIX, roomPlace } from '../core/campus.ts'
 import { type CampusData, ROOM_CATEGORIES, ROOM_CATEGORY_LABELS, type Room } from '../types.ts'
 
 // ① スタート（要件 F-03・F-04・F-10〜F-12）
@@ -20,15 +21,21 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
 
   // 検索: 名前・図面上の名前・別名に含まれていれば表示。全角・半角（３と3、ＣＡＤとCAD）の違いは同じとみなす
   const q = norm(query.trim())
+  // いまいる場所（QRの地点）そのものは、目的地に出さない
+  const originNode = data.checkpoints.find((c) => c.id === originCp)?.node
+  const candidates = data.rooms.filter((r) => r.node !== originNode)
   const rooms = q
-    ? data.rooms.filter((r) => [r.name, r.drawingName, ...r.aliases].some((s) => norm(s).includes(q)))
-    : data.rooms
+    ? candidates.filter((r) => [r.name, r.drawingName, ...r.aliases].some((s) => norm(s).includes(q)))
+    : candidates
 
-  const grouped = ROOM_CATEGORIES.map((c) => ({ category: c, rooms: rooms.filter((r) => r.category === c) })).filter(
+  // QRを貼った場所（事務室・生徒指導部・体育館など）は「主な場所」として先に出す
+  const main = rooms.filter((r) => r.id.startsWith(CP_ROOM_PREFIX))
+  const others = rooms.filter((r) => !r.id.startsWith(CP_ROOM_PREFIX))
+  const grouped = ROOM_CATEGORIES.map((c) => ({ category: c, rooms: others.filter((r) => r.category === c) })).filter(
     (g) => g.rooms.length > 0,
   )
 
-  const placeOf = (r: Room) => `${buildings.get(r.building)?.name ?? `${r.building}棟`}・${r.floor}階`
+  const placeOf = (r: Room) => roomPlace(r, data.buildings)
 
   return (
     <main className="v-screen">
@@ -88,7 +95,13 @@ export default function StartScreen({ data, originLabel, originCp, onChooseOrigi
         />
       </label>
 
-      {grouped.length === 0 && <p className="v-note">「{query.trim()}」に合う場所が見つかりません。</p>}
+      {main.length > 0 && (
+        <section className="v-group">
+          <h3>主な場所</h3>
+          <RoomList rooms={main} placeOf={placeOf} onChoose={onChooseRoom} />
+        </section>
+      )}
+      {grouped.length === 0 && main.length === 0 && <p className="v-note">「{query.trim()}」に合う場所が見つかりません。</p>}
       {grouped.map((g) => (
         <section key={g.category} className="v-group">
           <h3>{ROOM_CATEGORY_LABELS[g.category]}</h3>
